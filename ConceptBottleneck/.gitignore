@@ -1,0 +1,5 @@
+*pkl
+*out
+.ipynb_checkpoints/
+*pyc
+.idea/
