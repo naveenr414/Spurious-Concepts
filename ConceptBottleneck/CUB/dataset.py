@@ -18,7 +18,7 @@ class CUBDataset(Dataset):
     Returns a compatible Torch Dataset object customized for the CUB dataset
     """
 
-    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform=None):
+    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform=None,path_transform=lambda path: path):
         """
         Arguments:
         pkl_file_paths: list of full path to all the pkl data
@@ -41,6 +41,7 @@ class CUBDataset(Dataset):
         self.uncertain_label = uncertain_label
         self.image_dir = image_dir
         self.n_class_attr = n_class_attr
+        self.path_transform = path_transform
 
     def __len__(self):
         return len(self.data)
@@ -48,20 +49,8 @@ class CUBDataset(Dataset):
     def __getitem__(self, idx):
         img_data = self.data[idx]
         img_path = img_data['img_path']
-        # Trim unnecessary paths
-        try:
-            idx = img_path.split('/').index('CUB_200_2011')
-            if self.image_dir != 'images':
-                img_path = '/'.join([self.image_dir] + img_path.split('/')[idx+1:])
-                img_path = img_path.replace('images/', '')
-            else:
-                img_path = '/'.join(img_path.split('/')[idx:])
-            img = Image.open(img_path).convert('RGB')
-        except:
-            img_path_split = img_path.split('/')
-            split = 'train' if self.is_train else 'test'
-            img_path = '/'.join(img_path_split[:2] + [split] + img_path_split[2:])
-            img = Image.open(img_path).convert('RGB')
+        img_path = self.path_transform(img_path)
+        img = Image.open(img_path).convert('RGB')
 
         class_label = img_data['class_label']
         if self.transform:
@@ -155,7 +144,7 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
             #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
             ])
 
-    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform)
+    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform,path_transform = lambda path: "../../../main_code/dataset/"+path)
     if is_training:
         drop_last = True
         shuffle = True

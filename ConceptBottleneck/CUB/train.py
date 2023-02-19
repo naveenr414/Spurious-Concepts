@@ -32,9 +32,9 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
             #inputs = [i.long() for i in inputs]
             inputs = torch.stack(inputs).t().float()
         inputs = torch.flatten(inputs, start_dim=1).float()
-        inputs_var = torch.autograd.Variable(inputs).cuda()
+        inputs_var = torch.autograd.Variable(inputs).cuda() if torch.cuda.is_available() else torch.autograd.Variable(inputs)
         inputs_var = inputs_var.cuda() if torch.cuda.is_available() else inputs_var
-        labels_var = torch.autograd.Variable(labels).cuda()
+        labels_var = torch.autograd.Variable(labels).cuda() if torch.cuda_is_available() else torch.autograd.Variable(labels)
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
         
         outputs = model(inputs_var)
@@ -59,6 +59,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.eval()
 
     for _, data in enumerate(loader):
+        print("On {} out of {}".format(_,len(loader)))
         if attr_criterion is None:
             inputs, labels = data
             attr_labels, attr_labels_var = None, None
@@ -79,6 +80,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         labels_var = torch.autograd.Variable(labels)
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
 
+        loss_type = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+
         if is_training and args.use_aux:
             outputs, aux_outputs = model(inputs_var)
             losses = []
@@ -89,8 +92,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 out_start = 1
             if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
                 for i in range(len(attr_criterion)):
-                    losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(torch.cuda.FloatTensor), attr_labels_var[:, i]) \
-                                                            + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(torch.cuda.FloatTensor), attr_labels_var[:, i])))
+                    losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
+                                                            + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
         else: #testing or no aux logits
             outputs = model(inputs_var)
             losses = []
@@ -101,7 +104,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 out_start = 1
             if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
                 for i in range(len(attr_criterion)):
-                    losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(torch.cuda.FloatTensor), attr_labels_var[:, i]))
+                    losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]))
 
         if args.bottleneck: #attribute accuracy
             sigmoid_outputs = torch.nn.Sigmoid()(torch.cat(outputs, dim=1))
@@ -148,14 +151,18 @@ def train(model, args):
     logger.write(str(imbalance) + '\n')
     logger.flush()
 
-    model = model.cuda()
+    if torch.cuda.is_available():
+        model = model.cuda()
     criterion = torch.nn.CrossEntropyLoss()
     if args.use_attr and not args.no_img:
         attr_criterion = [] #separate criterion (loss function) for each attribute
         if args.weighted_loss:
             assert(imbalance is not None)
             for ratio in imbalance:
-                attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=torch.FloatTensor([ratio]).cuda()))
+                weight = torch.FloatTensor([ratio])
+                if torch.cuda.is_available():
+                    weight = weight.cuda()
+                attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=weight))
         else:
             for i in range(args.n_attributes):
                 attr_criterion.append(torch.nn.CrossEntropyLoss())
@@ -191,6 +198,7 @@ def train(model, args):
     best_val_acc = 0
 
     for epoch in range(0, args.epochs):
+        print("On epoch {}".format(epoch))
         train_loss_meter = AverageMeter()
         train_acc_meter = AverageMeter()
         if args.no_img:
