@@ -19,6 +19,83 @@ model_urls = {
 }
 
 
+class CBRBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(CBRBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
+
+class CBRNet(nn.Module):
+    def __init__(self, num_classes, 
+                 aux_logits=True,
+                 transform_input=False, 
+                 n_attributes=0, 
+                 bottleneck=False, 
+                 expand_dim=0, 
+                 three_class=False, 
+                 connect_CY=False,
+                pretrained=False,
+                freeze=False):
+        
+        super(CBRNet, self).__init__()
+        self.cbr1 = CBRBlock(3, 32)
+        self.cbr2 = CBRBlock(32, 64)
+        self.cbr3 = CBRBlock(64, 128)
+        self.cbr4 = CBRBlock(128, 256)
+        self.cbr5 = CBRBlock(256, 512)
+        self.all_fc = nn.ModuleList()
+        self.aux_logits = aux_logits
+        self.transform_input = transform_input
+        self.n_attributes = n_attributes
+        self.bottleneck = bottleneck
+        if aux_logits:
+            self.AuxLogits = InceptionAux(768, num_classes, n_attributes=self.n_attributes, bottleneck=bottleneck, \
+                                                expand_dim=expand_dim, three_class=three_class, connect_CY=connect_CY)
+
+        if connect_CY:
+            self.cy_fc = FC(n_attributes, num_classes, expand_dim)
+        else:
+            self.cy_fc = None
+
+        if self.n_attributes > 0:
+            if not bottleneck: #multitasking
+                self.all_fc.append(FC(45773312, num_classes, expand_dim))
+            for i in range(self.n_attributes):
+                self.all_fc.append(FC(45773312, 1, expand_dim))
+        else:
+            self.all_fc.append(FC(45773312, num_classes, expand_dim))
+            
+    def forward(self, x):
+        x = self.cbr1(x)
+        x = self.cbr2(x)
+        x = self.cbr3(x)
+        x = self.cbr4(x)
+        x = self.cbr5(x)
+        x = x.view(x.size(0), -1)
+        
+        if self.training and self.aux_logits:
+            out_aux = self.AuxLogits(x)
+        
+        out = []
+        for fc in self.all_fc:
+            out.append(fc(x))
+        if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
+            attr_preds = torch.cat(out[1:], dim=1)
+            out[0] += self.cy_fc(attr_preds)
+        if self.training and self.aux_logits:
+            return out, out_aux
+        else:
+            return out
+        
+        return x
+
 class End2EndModel(torch.nn.Module):
     def __init__(self, model1, model2, use_relu=False, use_sigmoid=False, n_class_attr=2):
         super(End2EndModel, self).__init__()
@@ -58,7 +135,8 @@ class MLP(nn.Module):
             self.linear = nn.Linear(input_dim, expand_dim)
             self.activation = torch.nn.ReLU()
             self.linear2 = nn.Linear(expand_dim, num_classes) #softmax is automatically handled by loss function
-        self.linear = nn.Linear(input_dim, num_classes)
+        else: 
+            self.linear = nn.Linear(input_dim, num_classes)
 
     def forward(self, x):
         x = self.linear(x)

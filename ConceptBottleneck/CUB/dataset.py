@@ -9,6 +9,8 @@ import torchvision.transforms as transforms
 
 from PIL import Image
 from CUB.config import BASE_DIR, N_ATTRIBUTES
+import CUB.config_chexpert
+import CUB.config_spurious
 from torch.utils.data import BatchSampler
 from torch.utils.data import Dataset, DataLoader
 
@@ -18,7 +20,7 @@ class CUBDataset(Dataset):
     Returns a compatible Torch Dataset object customized for the CUB dataset
     """
 
-    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform=None,path_transform=lambda path: path):
+    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform=None,path_transform=lambda path: path):
         """
         Arguments:
         pkl_file_paths: list of full path to all the pkl data
@@ -42,6 +44,7 @@ class CUBDataset(Dataset):
         self.image_dir = image_dir
         self.n_class_attr = n_class_attr
         self.path_transform = path_transform
+        self.experiment_name = experiment_name
 
     def __len__(self):
         return len(self.data)
@@ -116,7 +119,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     def __len__(self):
         return self.num_samples
 
-def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299):
+def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
     Loads data with transformations applied, and upsample the minority class if there is class imbalance and weighted loss is not used
@@ -144,7 +147,15 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
             #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
             ])
 
-    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, transform,path_transform = lambda path: "../../../main_code/dataset/"+path)
+    if path_transform == None:
+        if experiment_name == 'CUB':
+            path_transform = lambda path: "../../cem/cem/"+path
+        elif experiment_name == 'CUB_SPURIOUS':
+            path_transform = lambda path: "../../cem/cem/"+path
+        elif experiment_name == 'CHEXPERT':
+            path_transform = lambda path: "../../chest_dataset/" + path
+
+    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform)
     if is_training:
         drop_last = True
         shuffle = True

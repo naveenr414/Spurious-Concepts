@@ -19,7 +19,7 @@ def run_experiments(dataset, args):
             hyperparameter_optimization
         )
 
-    elif dataset == 'CUB':
+    elif dataset == 'CUB' or dataset == 'CHEXPERT':
         from CUB.train import (
             train_X_to_C,
             train_oracle_C_to_y_and_test_on_Chat,
@@ -70,7 +70,7 @@ def run_experiments(dataset, args):
 def parse_arguments():
     # First arg must be dataset, and based on which dataset it is, we will parse arguments accordingly
     assert len(sys.argv) > 2, 'You need to specify dataset and experiment'
-    assert sys.argv[1].upper() in ['OAI', 'CUB'], 'Please specify OAI or CUB dataset'
+    assert sys.argv[1].upper() in ['OAI', 'CUB','CHEXPERT','CUB_SPURIOUS'], 'Please specify OAI or CUB dataset'
     assert sys.argv[2] in ['Concept_XtoC', 'Independent_CtoY', 'Sequential_CtoY',
                            'Standard', 'StandardWithAuxC', 'Multitask', 'Joint', 'Probe',
                            'TTI', 'Robustness', 'HyperparameterSearch'], \
@@ -81,10 +81,11 @@ def parse_arguments():
     # Handle accordingly to dataset
     if dataset == 'OAI':
         from OAI.train import parse_arguments
-    elif dataset == 'CUB':
+    elif dataset == 'CUB' or dataset == 'CHEXPERT' or dataset == 'CUB_SPURIOUS':
         from CUB.train import parse_arguments
 
     args = parse_arguments(experiment=experiment)
+    args[0].experiment_name=dataset.upper()
     return dataset, args
 
 if __name__ == '__main__':

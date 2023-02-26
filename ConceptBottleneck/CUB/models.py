@@ -1,5 +1,5 @@
 
-from CUB.template_model import MLP, inception_v3, End2EndModel
+from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet
 
 
 # Independent & Sequential Model

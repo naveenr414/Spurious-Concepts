@@ -1,8 +1,7 @@
-
 # General
 BASE_DIR = ''
-N_ATTRIBUTES = 312
-N_CLASSES = 200
+N_ATTRIBUTES = 13
+N_CLASSES = 2
  
 # Training
 UPWEIGHT_RATIO = 9.0

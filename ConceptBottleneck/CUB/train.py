@@ -11,6 +11,7 @@ import math
 import torch
 import numpy as np
 from analysis import Logger, AverageMeter, accuracy, binary_accuracy
+from sklearn.metrics import roc_auc_score
 
 from CUB import probe, tti, gen_cub_synthetic, hyperopt
 from CUB.dataset import load_data, find_class_imbalance
@@ -34,7 +35,7 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
         inputs = torch.flatten(inputs, start_dim=1).float()
         inputs_var = torch.autograd.Variable(inputs).cuda() if torch.cuda.is_available() else torch.autograd.Variable(inputs)
         inputs_var = inputs_var.cuda() if torch.cuda.is_available() else inputs_var
-        labels_var = torch.autograd.Variable(labels).cuda() if torch.cuda_is_available() else torch.autograd.Variable(labels)
+        labels_var = torch.autograd.Variable(labels).cuda() if torch.cuda.is_available() else torch.autograd.Variable(labels)
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
         
         outputs = model(inputs_var)
@@ -57,9 +58,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.train()
     else:
         model.eval()
-
+        
     for _, data in enumerate(loader):
-        print("On {} out of {}".format(_,len(loader)))
         if attr_criterion is None:
             inputs, labels = data
             attr_labels, attr_labels_var = None, None
@@ -135,10 +135,12 @@ def train(model, args):
     imbalance = None
     if args.use_attr and not args.no_img and args.weighted_loss:
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
-        if args.weighted_loss == 'multiple':
+        """if args.weighted_loss == 'multiple':
             imbalance = find_class_imbalance(train_data_path, True)
         else:
-            imbalance = find_class_imbalance(train_data_path, False)
+            imbalance = find_class_imbalance(train_data_path, False)"""
+        
+        imbalance = [1 for i in range(args.n_attributes)]
 
     if os.path.exists(args.log_dir): # job restarted by cluster
         for f in os.listdir(args.log_dir):
@@ -186,13 +188,13 @@ def train(model, args):
 
     if args.ckpt: #retraining
         train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling)
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name)
         val_loader = None
     else:
         train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling)
-        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr)
-
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name)
+        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name)
+        
     best_val_epoch = -1
     best_val_loss = float('inf')
     best_val_acc = 0
@@ -220,7 +222,7 @@ def train(model, args):
             val_loss_meter = train_loss_meter
             val_acc_meter = train_acc_meter
 
-        if best_val_acc < val_acc_meter.avg:
+        if best_val_acc < val_acc_meter.avg: 
             best_val_epoch = epoch
             best_val_acc = val_acc_meter.avg
             logger.write('New model best model at epoch %d\n' % epoch)
@@ -230,7 +232,7 @@ def train(model, args):
 
         train_loss_avg = train_loss_meter.avg
         val_loss_avg = val_loss_meter.avg
-        
+                
         logger.write('Epoch [%d]:\tTrain loss: %.4f\tTrain accuracy: %.4f\t'
                 'Val loss: %.4f\tVal acc: %.4f\t'
                 'Best val epoch: %d\n'
@@ -252,7 +254,9 @@ def train(model, args):
         if epoch - best_val_epoch >= 100:
             print("Early stopping because acc hasn't improved for a long time")
             break
-
+    print("Saving the model again!")
+    torch.save(model, os.path.join(args.log_dir, 'best_model_%d.pth' % args.seed))
+            
 def train_X_to_C(args):
     model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
                       n_attributes=args.n_attributes, expand_dim=args.expand_dim, three_class=args.three_class)
