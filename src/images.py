@@ -15,6 +15,24 @@ def copy_image(img_loc,output_loc):
     img = Image.open(img_loc)
     img.save(output_loc)
 
+def add_blur_array(img):
+    """Given a PIL Image, add a blur to the array in the bottom left
+    
+    Arguments: 
+        img: PIL image without a blur
+        
+    Returns: PIL Image with a blur
+    """
+    
+    width, height = img.size
+    left, top, right, bottom = 0, height - 50, 50, height
+    box = (left, top, right, bottom)
+    region = img.crop(box)
+    
+    blurred_region = region.filter(ImageFilter.GaussianBlur(radius=3))
+    img.paste(blurred_region, box)
+    return img
+    
 def add_blur(img_loc, output_loc):
     """Given an image location, read in the image, and add a Gaussian blur to the image
     Add it in the bottom 100x100 left corner
@@ -29,17 +47,32 @@ def add_blur(img_loc, output_loc):
     """
     
     img = Image.open(img_loc)
+    img = add_blur_array(img)
+    img.save(output_loc)
+    
+def add_tag_array(img):
+    """Given a PIL Image, add a checkerboard pattern to the bottom left of the image
+    
+    Arguments:
+        img: PIL Image without a tag
+
+    Returns: PIL Image with the tag
+    """
     
     width, height = img.size
-    left, top, right, bottom = 0, height - 50, 50, height
-    box = (left, top, right, bottom)
-    region = img.crop(box)
     
-    blurred_region = region.filter(ImageFilter.GaussianBlur(radius=3))
-    img.paste(blurred_region, box)
+    left, top, right, bottom = 0, height - 20, 20, height
+    draw = ImageDraw.Draw(img)
     
-    img.save(output_loc)
-
+    for x in range(left, right):
+        for y in range(top, bottom):
+            if (x + y) % 2 == 0:
+                draw.rectangle((x, y, x+1, y+1), fill='white')
+            else:
+                draw.rectangle((x, y, x+1, y+1), fill='black')
+    
+    return img
+    
 def add_tag(img_loc, output_loc):
     """Given an image location, read in the image, and add a checkboard tag to the image
     Add it in the bottom 10x10 left corner
@@ -55,18 +88,7 @@ def add_tag(img_loc, output_loc):
 
     
     img = Image.open(img_loc)
-    width, height = img.size
-    
-    left, top, right, bottom = 0, height - 20, 20, height
-    draw = ImageDraw.Draw(img)
-    
-    for x in range(left, right):
-        for y in range(top, bottom):
-            if (x + y) % 2 == 0:
-                draw.rectangle((x, y, x+1, y+1), fill='white')
-            else:
-                draw.rectangle((x, y, x+1, y+1), fill='black')
-    
+    img = add_tag_array(img)
     img.save(output_loc)
 
 def create_blur_dataset():

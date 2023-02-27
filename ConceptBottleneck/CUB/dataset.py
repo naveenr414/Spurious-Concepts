@@ -54,7 +54,7 @@ class CUBDataset(Dataset):
         img_path = img_data['img_path']
         img_path = self.path_transform(img_path)
         img = Image.open(img_path).convert('RGB')
-
+        
         class_label = img_data['class_label']
         if self.transform:
             img = self.transform(img)
@@ -119,7 +119,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     def __len__(self):
         return self.num_samples
 
-def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',):
+def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
     Loads data with transformations applied, and upsample the minority class if there is class imbalance and weighted loss is not used
@@ -127,7 +127,11 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
     """
     resized_resol = int(resol * 256/224)
     is_training = any(['train.pkl' in f for f in pkl_paths])
-    if is_training:
+    
+    if get_raw:
+        transform = transforms.Compose([transforms.CenterCrop(resol),
+            transforms.ToTensor()])
+    elif is_training:
         transform = transforms.Compose([
             #transforms.Resize((resized_resol, resized_resol)),
             #transforms.RandomSizedCrop(resol),
@@ -154,8 +158,9 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
             path_transform = lambda path: "../../cem/cem/"+path
         elif experiment_name == 'CHEXPERT':
             path_transform = lambda path: "../../chest_dataset/" + path
-
+            
     dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform)
+        
     if is_training:
         drop_last = True
         shuffle = True
