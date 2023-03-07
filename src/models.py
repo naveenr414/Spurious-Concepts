@@ -34,7 +34,7 @@ def run_independent_model(model,x):
     """Run a independent model and get the y_pred and c_pred
     
     Arguments: 
-        model: An array with the bottleneck and independent parts of the model
+        model: An array with the bottleneck and bottleneck parts of the model
         x: Numpy array that we run through the model
 
     Returns:
@@ -42,11 +42,11 @@ def run_independent_model(model,x):
     """
     
     concept_model = model[0]
-    independent_model = model[1]
+    bottleneck_model = model[1]
     
     c_raw = concept_model(x)
     c_pred = torch.stack(c_raw).permute(1, 0, 2).squeeze(-1)
-    y_pred = independent_model((c_pred>0).int().float())
+    y_pred = bottleneck_model((c_pred>0).int().float())
         
     return y_pred, c_pred
 
