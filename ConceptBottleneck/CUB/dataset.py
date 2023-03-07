@@ -119,14 +119,14 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     def __len__(self):
         return self.num_samples
 
-def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False):
+def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False,is_training=True):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
     Loads data with transformations applied, and upsample the minority class if there is class imbalance and weighted loss is not used
     NOTE: resampling is customized for first attribute only, so change sampler.py if necessary
     """
     resized_resol = int(resol * 256/224)
-    is_training = any(['train.pkl' in f for f in pkl_paths])
+    is_training = any(['train.pkl' in f for f in pkl_paths]) and is_training
     
     if get_raw:
         transform = transforms.Compose([transforms.CenterCrop(resol),
