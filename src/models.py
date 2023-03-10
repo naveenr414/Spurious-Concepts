@@ -48,7 +48,7 @@ def run_independent_model(model,x):
     c_pred = torch.stack(c_raw).permute(1, 0, 2).squeeze(-1)
     y_pred = bottleneck_model((c_pred>0).int().float())
         
-    return y_pred, ((c_pred>0).int().float()).T
+    return y_pred, c_pred.T
 
 def get_accuracy(model,model_function,dataset):
     """Compute model accuracy for a dataset
@@ -154,3 +154,23 @@ def spurious_score(model,model_function,spurious_type,dataset,target_class):
 
     return total_success/total_num
 
+def get_attribute_class_weights(model,model_function,weights,x):
+    """Given a model, compute the importance of each concpet for each
+        product of model_w{i} * concept activation_{j}
+        
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run the mode, such as run_joint_model
+        weights: Weights from a PyTorch model
+        x: Data point to run through the model
+
+    Returns:
+        Torch tensors for weights*classes and the predicted concepts
+    """
+    
+    y_pred, c_pred = model_function(model,x)
+    c_pred_copy = c_pred.repeat((200,1,1))
+    weights_per_class = weights.repeat((c_pred.shape[-1],1,1)).transpose(0, 1).transpose(1, 2)
+    weights_per_class = weights_per_class*c_pred_copy
+    
+    return weights_per_class, c_pred

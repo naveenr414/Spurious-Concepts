@@ -1,5 +1,9 @@
 import pickle
 import random
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import numpy as np
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -56,3 +60,18 @@ def new_metadata(dataset,split,unknown=False):
 
             
     pickle.dump(preprocessed_train,open(file_location,"wb"))
+
+def plot_saliency(model,model_function,concept_num,x):
+    x.requires_grad = True
+
+    y,c = model_function(model,x)
+
+    grads = torch.autograd.grad(c[concept_num], x, grad_outputs=torch.ones_like(c[concept_num]), retain_graph=True)[0]
+
+    saliency_map = F.relu(grads).max(dim=1, keepdim=True)[0]
+    saliency_map /= saliency_map.abs().max()
+    saliency_map = saliency_map.detach().cpu().numpy()[0]
+
+    plt.imshow(np.transpose(saliency_map,(1,2,0)), cmap='jet')
+    plt.axis('off')
+    plt.show()

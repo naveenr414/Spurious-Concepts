@@ -38,8 +38,6 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
         labels_var = torch.autograd.Variable(labels).cuda() if torch.cuda.is_available() else torch.autograd.Variable(labels)
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
         
-        prnt("Inputs for bottleneck part {}".format(inputs_var.shape))
-        
         outputs = model(inputs_var)
         loss = criterion(outputs, labels_var)
         acc = accuracy(outputs, labels, topk=(1,))
