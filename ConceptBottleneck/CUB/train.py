@@ -38,6 +38,8 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
         labels_var = torch.autograd.Variable(labels).cuda() if torch.cuda.is_available() else torch.autograd.Variable(labels)
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
         
+        prnt("Inputs for bottleneck part {}".format(inputs_var.shape))
+        
         outputs = model(inputs_var)
         loss = criterion(outputs, labels_var)
         acc = accuracy(outputs, labels, topk=(1,))
@@ -58,6 +60,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.train()
     else:
         model.eval()
+
+    print("Attr criterion {}".format(len(attr_criterion)))
         
     for _, data in enumerate(loader):
         if attr_criterion is None:
@@ -108,6 +112,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
 
         if args.bottleneck: #attribute accuracy
             sigmoid_outputs = torch.nn.Sigmoid()(torch.cat(outputs, dim=1))
+            if args.use_unknown:
+                sigmoid_outputs = sigmoid_outputs[:,:-1]
             acc = binary_accuracy(sigmoid_outputs, attr_labels)
             acc_meter.update(acc.data.cpu().numpy(), inputs.size(0))
         else:
@@ -132,6 +138,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
 
 def train(model, args):
     # Determine imbalance
+    print("Model is {}".format(model))
+    
     imbalance = None
     if args.use_attr and not args.no_img and args.weighted_loss:
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
@@ -258,8 +266,12 @@ def train(model, args):
     torch.save(model, os.path.join(args.log_dir, 'best_model_%d.pth' % args.seed))
             
 def train_X_to_C(args):
-    model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
-                      n_attributes=args.n_attributes, expand_dim=args.expand_dim, three_class=args.three_class)
+    if args.use_unknown:
+        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
+                          n_attributes=args.n_attributes+1, expand_dim=args.expand_dim, three_class=args.three_class)
+    else:
+        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
+                          n_attributes=args.n_attributes, expand_dim=args.expand_dim, three_class=args.three_class)
     train(model, args)
 
 def train_oracle_C_to_y_and_test_on_Chat(args):
@@ -275,7 +287,8 @@ def train_Chat_to_y_and_test_on_Chat(args):
 def train_X_to_C_to_y(args):
     model = ModelXtoCtoY(n_class_attr=args.n_class_attr, pretrained=args.pretrained, freeze=args.freeze,
                          num_classes=N_CLASSES, use_aux=args.use_aux, n_attributes=args.n_attributes,
-                         expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid)
+                         expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
+                        use_unknown=args.use_unknown)
     train(model, args)
 
 def train_X_to_y(args):
@@ -334,6 +347,8 @@ def parse_arguments(experiment):
                             help='whether to load pretrained model & just fine-tune')
         parser.add_argument('-freeze', action='store_true', help='whether to freeze the bottom part of inception network')
         parser.add_argument('-use_aux', action='store_true', help='whether to use aux logits')
+        parser.add_argument('-use_unknown', action='store_true',
+                            help='whether to include an extra node during training (only with sequential, joint)')
         parser.add_argument('-use_attr', action='store_true',
                             help='whether to use attributes (FOR COTRAINING ARCHITECTURE ONLY)')
         parser.add_argument('-attr_loss_weight', default=1.0, type=float, help='weight for loss by predicting attributes')

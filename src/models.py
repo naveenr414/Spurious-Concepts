@@ -26,7 +26,7 @@ def run_joint_model(model,x):
     
     output = model.forward(x)
     y_pred = output[0]
-    c_pred = torch.stack(output[1:])
+    c_pred = torch.stack(output[1:]).squeeze(-1)
     
     return y_pred, c_pred
 
@@ -48,7 +48,7 @@ def run_independent_model(model,x):
     c_pred = torch.stack(c_raw).permute(1, 0, 2).squeeze(-1)
     y_pred = bottleneck_model((c_pred>0).int().float())
         
-    return y_pred, c_pred
+    return y_pred, ((c_pred>0).int().float()).T
 
 def get_accuracy(model,model_function,dataset):
     """Compute model accuracy for a dataset
@@ -153,3 +153,4 @@ def spurious_score(model,model_function,spurious_type,dataset,target_class):
         total_num += len(x)
 
     return total_success/total_num
+

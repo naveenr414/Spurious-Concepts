@@ -5,6 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from torchvision import transforms
+from src.util import *
 
 class UnNormalize(object):
     def __init__(self, mean, std):
@@ -254,7 +255,10 @@ def create_blur_dataset():
             copy_image(image,output_loc)
         else:
             add_blur(image,output_loc)
-                       
+
+    for split in ["train","val","test"]:
+        new_metadata("CUB_blur",split)
+                
 def create_tag_dataset():
     """Create the CUB tag dataset by going through every image in CUB small
     Then running the tag function over it to produce an output image"""
@@ -267,6 +271,9 @@ def create_tag_dataset():
             copy_image(image,output_loc)
         else:
             add_tag(image,output_loc)
+            
+    for split in ["train","val","test"]:
+        new_metadata("CUB_tag",split)
             
 def create_simple_tag_dataset():
     """Create the heavily modified CUB tag dataset by going through every image in CUB small

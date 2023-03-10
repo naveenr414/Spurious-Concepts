@@ -175,7 +175,7 @@ def create_logits_data(model_path, out_dir, data_dir='', use_relu=False, use_sig
     """
     Replace attribute labels in data_dir with the logits output by the model from model_path and save the new data to out_dir
     """
-    model = torch.load(model_path)
+    model = torch.load(model_path) 
     get_logits_train = lambda d: inference(d['img_path'], model, use_relu, use_sigmoid, is_train=True)
     get_logits_test = lambda d: inference(d['img_path'], model, use_relu, use_sigmoid, is_train=False)
     create_new_dataset(out_dir, 'attribute_label', get_logits_train, datasets=['train'], data_dir=data_dir)
@@ -209,18 +209,14 @@ def inference(img_path, model, use_relu, use_sigmoid, is_train, resol=299, layer
             transforms.ToTensor(),  # implicitly divides by 255
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[2, 2, 2])
         ])
-
+    img_path = "../../cem/cem/"+img_path
     # Trim unnecessary paths
-    try:
-        idx = img_path.split('/').index('CUB_200_2011')
-        img_path = '/'.join(img_path.split('/')[idx:])
-    except:
-        img_path_split = img_path.split('/')
-        split = 'train' if is_train else 'test'
-        img_path = '/'.join(img_path_split[:2] + [split] + img_path_split[2:])
     img = Image.open(img_path).convert('RGB')
     img_tensor = transform(img).unsqueeze(0)
-    input_var = torch.autograd.Variable(img_tensor).cuda()
+    input_var = torch.autograd.Variable(img_tensor)
+    
+    if torch.cuda.is_available():
+        input_var = input_var.cuda() 
     if layer_idx is not None:
         all_mods = list(model.modules())
         cropped_model = torch.nn.Sequential(*list(model.children())[:layer_idx])  # nn.ModuleList(all_mods[:layer_idx])

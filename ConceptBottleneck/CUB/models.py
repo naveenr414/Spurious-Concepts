@@ -3,7 +3,7 @@ from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet
 
 
 # Independent & Sequential Model
-def ModelXtoC(pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim, three_class):
+def ModelXtoC(pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim, three_class):    
     return inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
                         n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                         three_class=three_class)
@@ -24,7 +24,10 @@ def ModelXtoChat_ChatToY(n_class_attr, n_attributes, num_classes, expand_dim):
 
 # Joint Model
 def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim,
-                 use_relu, use_sigmoid):
+                 use_relu, use_sigmoid,use_unknown):
+    
+    if use_unknown:
+        n_attributes += 1
     model1 = inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
                           n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                           three_class=(n_class_attr == 3))
