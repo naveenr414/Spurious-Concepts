@@ -1,6 +1,10 @@
 from src.images import *
 import torch
 from torchvision import transforms
+from cem.models.cem import ConceptEmbeddingModel
+import joblib
+from cem.data.CUB200.cub_loader import load_data, find_class_imbalance
+from experiments import intervention_utils
 
 def logits_to_index(logits):
     """Convert logits from a models outputs to predicted classes
@@ -29,6 +33,50 @@ def run_joint_model(model,x):
     c_pred = torch.stack(output[1:]).squeeze(-1)
     
     return y_pred, c_pred
+
+def load_cem_model(config,result_dir):
+    """Load a CEM model from a config file
+    
+    Arguments:
+        config: String location of the CEM model config
+        
+    Returns: PyTorch model based on the config
+    """
+    
+    config = joblib.load(config)
+    model = intervention_utils.load_trained_model(
+        config=config,
+        n_tasks=200,
+        n_concepts=113,
+        result_dir=result_dir,
+        split=0,
+        imbalance=None,
+        intervention_idxs=[],
+        train_dl=None,
+        sequential=False,
+        independent=False,
+    )
+    
+    return model
+
+    
+
+def run_cem_model(model,x):
+    """Run a CEM model and get the y_pred and c_pred
+    
+    Arguments:
+        model: A PyTorch CEM model
+        x: Numpy array we run through the model
+    
+    Returns:
+        Two Torch Tensors: y_pred and c_pred
+    """
+    
+    output = model.forward(x)
+    y_pred = output[2]
+    c_pred = output[1]
+    
+    return y_pred, c_pred.T
 
 def run_independent_model(model,x):
     """Run a independent model and get the y_pred and c_pred
@@ -154,7 +202,7 @@ def spurious_score(model,model_function,spurious_type,dataset,target_class):
 
     return total_success/total_num
 
-def get_attribute_class_weights(model,model_function,weights,x):
+def get_attribute_class_weights(model,model_function,weights,x,cem=False):
     """Given a model, compute the importance of each concpet for each
         product of model_w{i} * concept activation_{j}
         
@@ -163,6 +211,7 @@ def get_attribute_class_weights(model,model_function,weights,x):
         model_function: Function to run the mode, such as run_joint_model
         weights: Weights from a PyTorch model
         x: Data point to run through the model
+        cem: Are we running with a CEM model? 
 
     Returns:
         Torch tensors for weights*classes and the predicted concepts
@@ -172,5 +221,11 @@ def get_attribute_class_weights(model,model_function,weights,x):
     c_pred_copy = c_pred.repeat((200,1,1))
     weights_per_class = weights.repeat((c_pred.shape[-1],1,1)).transpose(0, 1).transpose(1, 2)
     weights_per_class = weights_per_class*c_pred_copy
+    
+    if cem:
+        weights_per_class = torch.split(weights_per_class,split_size_or_sections=113, dim=1)
+        weights_per_class = torch.stack(weights_per_class, dim=0)
+        weights_per_class = torch.sum(weights_per_class, axis=0)
+
     
     return weights_per_class, c_pred

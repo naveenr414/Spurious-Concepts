@@ -50,7 +50,7 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
             optimizer.step() #optimizer step to update parameters
     return loss_meter, acc_meter
 
-def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_criterion, args, is_training):
+def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_criterion, args, epoch, is_training):
     """
     For the rest of the networks (X -> A, cotraining, simple finetune)
     """
@@ -58,8 +58,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.train()
     else:
         model.eval()
-
-    print("Attr criterion {}".format(len(attr_criterion)))
+        
+    print("Running epoch!")
         
     for _, data in enumerate(loader):
         if attr_criterion is None:
@@ -83,11 +83,13 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
 
         loss_type = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-
+        
         if is_training and args.use_aux:
-            outputs, aux_outputs = model(inputs_var)
+            binary = args.train_addition == "binary"
+            outputs, aux_outputs = model(inputs_var,binary=binary)
             losses = []
             out_start = 0
+            
             if not args.bottleneck: #loss main is for the main task label (always the first output)
                 loss_main = 1.0 * criterion(outputs[0], labels_var) + 0.4 * criterion(aux_outputs[0], labels_var)
                 losses.append(loss_main)
@@ -96,6 +98,24 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 for i in range(len(attr_criterion)):
                     losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
                                                             + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
+                    
+            if args.train_addition == "alternate_loss":
+                print("Running alternate loss")
+                which_loss = epoch%2
+                if which_loss == 0:
+                    losses = losses[1:]
+                else:
+                    losses = losses[:1]
+            if args.train_addition == "concept_loss":
+                attr_labels_formatted = torch.chunk(attr_labels, chunks=attr_labels.shape[1], dim=1)
+                attr_labels_formatted = [tensor.view(attr_labels.shape[0], 1).float() for tensor in attr_labels_formatted]
+                if torch.cuda.is_available():
+                    attr_labels_formatted = [i.cuda() for i in attr_labels_formatted]
+                
+                outputs = model.forward_stage2(attr_labels_formatted)
+                loss_concept = criterion(outputs[0],labels_var)
+                losses.append(0.5*loss_concept)
+                
         else: #testing or no aux logits
             outputs = model(inputs_var)
             losses = []
@@ -134,10 +154,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
             optimizer.step()
     return loss_meter, acc_meter
 
-def train(model, args):
-    # Determine imbalance
-    print("Model is {}".format(model))
-    
+def train(model, args):    
     imbalance = None
     if args.use_attr and not args.no_img and args.weighted_loss:
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
@@ -170,7 +187,11 @@ def train(model, args):
                 weight = torch.FloatTensor([ratio])
                 if torch.cuda.is_available():
                     weight = weight.cuda()
-                attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=weight))
+                if args.train_addition == 'mse':
+                    print("Using mse loss")
+                    attr_criterion.append(torch.nn.MSELoss())
+                else:
+                    attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=weight))
         else:
             for i in range(args.n_attributes):
                 attr_criterion.append(torch.nn.CrossEntropyLoss())
@@ -212,7 +233,7 @@ def train(model, args):
         if args.no_img:
             train_loss_meter, train_acc_meter = run_epoch_simple(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, args, is_training=True)
         else:
-            train_loss_meter, train_acc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, attr_criterion, args, is_training=True)
+            train_loss_meter, train_acc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, attr_criterion, args, epoch, is_training=True)
  
         if not args.ckpt: # evaluate on val set
             val_loss_meter = AverageMeter()
@@ -366,6 +387,8 @@ def parse_arguments(experiment):
         parser.add_argument('-data_dir', default='official_datasets', help='directory to the training data')
         parser.add_argument('-image_dir', default='images', help='test image folder to run inference on')
         parser.add_argument('-resampling', help='Whether to use resampling', action='store_true')
+        parser.add_argument('-train_addition', default='',type=str,
+                            help='Catch-all argument to account for different training configs. Examples include "mse", "concept_loss", and "binary", and "alternate_loss"')
         parser.add_argument('-end2end', action='store_true',
                             help='Whether to train X -> A -> Y end to end. Train cmd is the same as cotraining + this arg')
         parser.add_argument('-optimizer', default='SGD', help='Type of optimizer to use, options incl SGD, RMSProp, Adam')

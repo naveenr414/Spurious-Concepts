@@ -118,12 +118,15 @@ class End2EndModel(torch.nn.Module):
         all_out.extend(stage1_out)
         return all_out
 
-    def forward(self, x):
+    def forward(self, x,binary=False):
         if self.first_model.training:
-            outputs, aux_outputs = self.first_model(x)
+            outputs, aux_outputs = self.first_model(x,binary=binary)
+            if binary:
+                print("Running binary!")
+                outputs = [torch.round(i).float() for i in outputs]
             return self.forward_stage2(outputs), self.forward_stage2(aux_outputs)
         else:
-            outputs = self.first_model(x)
+            outputs = self.first_model(x,binary=binary)
             return self.forward_stage2(outputs)
 
 
@@ -242,7 +245,7 @@ class Inception3(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x,binary=False):
         if self.transform_input:
             x_ch0 = torch.unsqueeze(x[:, 0], 1) * (0.229 / 0.5) + (0.485 - 0.5) / 0.5
             x_ch1 = torch.unsqueeze(x[:, 1], 1) * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
@@ -300,6 +303,9 @@ class Inception3(nn.Module):
             out.append(fc(x))
         if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
             attr_preds = torch.cat(out[1:], dim=1)
+            if binary:
+                attr_preds = torch.round(attr_preds).float()
+            
             out[0] += self.cy_fc(attr_preds)
         if self.training and self.aux_logits:
             return out, out_aux
