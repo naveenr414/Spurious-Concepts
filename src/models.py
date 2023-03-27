@@ -3,7 +3,7 @@ import torch
 from torchvision import transforms
 from cem.models.cem import ConceptEmbeddingModel
 import joblib
-from cem.data.CUB200.cub_loader import load_data, find_class_imbalance
+from cem.data.CUB200.cub_loader import find_class_imbalance
 from experiments import intervention_utils
 
 def logits_to_index(logits):
