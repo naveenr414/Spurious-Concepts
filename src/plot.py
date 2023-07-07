@@ -7,7 +7,7 @@ colors = sns.color_palette("colorblind", 30)
 CUB_ATTRIBUTES = open("../cem/cem/CUB/metadata/attributes.txt").read().strip().split("\n")
 CUB_ATTRIBUTES = [i.split(" ")[1] for i in CUB_ATTRIBUTES]+['Extra Node']
 
-def plot_most_important_classes(weights_by_class,labels, k=5,add_extra_node=False):
+def plot_most_important_classes(weights_by_class,labels, label_num,k=5,add_extra_node=False):
     """Plot the k=5 most important classes in a bar plot
     
     Arguments:
@@ -19,7 +19,7 @@ def plot_most_important_classes(weights_by_class,labels, k=5,add_extra_node=Fals
     Side Effects: Plots the largest weights by class
     """
     
-    avg_weight = torch.mean(weights_by_class[0,:,:],dim=1)
+    avg_weight = torch.mean(weights_by_class[label_num,:,:],dim=1)
     largest = list(np.argsort(avg_weight.detach().numpy())[::-1][:k])
     if add_extra_node:
         largest += [112]

@@ -152,15 +152,12 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
             ])
 
     if path_transform == None:
-        if experiment_name == 'CUB':
-            path_transform = lambda path: "../../cem/cem/"+path
-        elif experiment_name == 'CUB_SPURIOUS':
-            path_transform = lambda path: "../../cem/cem/"+path
-        elif experiment_name == 'CHEXPERT':
+        path_transform = lambda path: "../../cem/cem/"+path
+        if experiment_name == 'CHEXPERT':
             path_transform = lambda path: "../../chest_dataset/" + path
             
     dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform)
-        
+            
     if is_training:
         drop_last = True
         shuffle = True

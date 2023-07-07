@@ -59,7 +59,6 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
     else:
         model.eval()
         
-    print("Running epoch!")
         
     for _, data in enumerate(loader):
         if attr_criterion is None:
@@ -76,7 +75,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 attr_labels = attr_labels.unsqueeze(1)
             attr_labels_var = torch.autograd.Variable(attr_labels).float()
             attr_labels_var = attr_labels_var.cuda() if torch.cuda.is_available() else attr_labels_var
-
+            
         inputs_var = torch.autograd.Variable(inputs)
         inputs_var = inputs_var.cuda() if torch.cuda.is_available() else inputs_var
         labels_var = torch.autograd.Variable(labels)
@@ -151,6 +150,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         if is_training:
             optimizer.zero_grad()
             total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
     return loss_meter, acc_meter
 
@@ -217,11 +217,11 @@ def train(model, args):
         train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
                                  n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name)
         val_loader = None
-    else:
+    else:        
         train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
                                  n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name)
         val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name)
-        
+    
     best_val_epoch = -1
     best_val_loss = float('inf')
     best_val_acc = 0
@@ -243,7 +243,7 @@ def train(model, args):
                 if args.no_img:
                     val_loss_meter, val_acc_meter = run_epoch_simple(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, args, is_training=False)
                 else:
-                    val_loss_meter, val_acc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, attr_criterion, args, is_training=False)
+                    val_loss_meter, val_acc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, attr_criterion, args, epoch, is_training=False)
 
         else: #retraining
             val_loss_meter = train_loss_meter
@@ -286,36 +286,36 @@ def train(model, args):
             
 def train_X_to_C(args):
     if args.use_unknown:
-        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
+        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=args.num_classes, use_aux=args.use_aux,
                           n_attributes=args.n_attributes+1, expand_dim=args.expand_dim, three_class=args.three_class)
     else:
-        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
+        model = ModelXtoC(pretrained=args.pretrained, freeze=args.freeze, num_classes=args.num_classes, use_aux=args.use_aux,
                           n_attributes=args.n_attributes, expand_dim=args.expand_dim, three_class=args.three_class)
     train(model, args)
 
 def train_oracle_C_to_y_and_test_on_Chat(args):
     model = ModelOracleCtoY(n_class_attr=args.n_class_attr, n_attributes=args.n_attributes,
-                            num_classes=N_CLASSES, expand_dim=args.expand_dim)
+                            num_classes=args.num_classes, expand_dim=args.expand_dim)
     train(model, args)
 
 def train_Chat_to_y_and_test_on_Chat(args):
     model = ModelXtoChat_ChatToY(n_class_attr=args.n_class_attr, n_attributes=args.n_attributes,
-                                 num_classes=N_CLASSES, expand_dim=args.expand_dim)
+                                 num_classes=args.num_classes, expand_dim=args.expand_dim)
     train(model, args)
 
 def train_X_to_C_to_y(args):
     model = ModelXtoCtoY(n_class_attr=args.n_class_attr, pretrained=args.pretrained, freeze=args.freeze,
-                         num_classes=N_CLASSES, use_aux=args.use_aux, n_attributes=args.n_attributes,
+                         num_classes=args.num_classes, use_aux=args.use_aux, n_attributes=args.n_attributes,
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
                         use_unknown=args.use_unknown)
     train(model, args)
 
 def train_X_to_y(args):
-    model = ModelXtoY(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux)
+    model = ModelXtoY(pretrained=args.pretrained, freeze=args.freeze, num_classes=args.num_classes, use_aux=args.use_aux)
     train(model, args)
 
 def train_X_to_Cy(args):
-    model = ModelXtoCY(pretrained=args.pretrained, freeze=args.freeze, num_classes=N_CLASSES, use_aux=args.use_aux,
+    model = ModelXtoCY(pretrained=args.pretrained, freeze=args.freeze, num_classes=args.num_classes, use_aux=args.use_aux,
                        n_attributes=args.n_attributes, three_class=args.three_class, connect_CY=args.connect_CY)
     train(model, args)
 
@@ -405,6 +405,8 @@ def parse_arguments(experiment):
                                  'For end2end & bottleneck model')
         parser.add_argument('-connect_CY', action='store_true',
                             help='Whether to use concepts as auxiliary features (in multitasking) to predict Y')
+        parser.add_argument('-num_classes', type=int,default=N_CLASSES,
+                            help='How many classes there are for classification')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)

@@ -4,6 +4,10 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
+from captum.attr import IntegratedGradients, configure_interpretable_embedding_layer
+from captum.attr import visualization as viz
+from matplotlib.colors import LinearSegmentedColormap
+import cv2
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -61,17 +65,124 @@ def new_metadata(dataset,split,unknown=False):
             
     pickle.dump(preprocessed_train,open(file_location,"wb"))
 
-def plot_saliency(model,model_function,concept_num,x):
+def plot_saliency(model,model_function,concept_num,x,input_num):
+    """Plot a saliency map for a concept number given a model + data point
+    
+    Arguments:
+        model: Model weights loaded in 
+        model_function: Function such as run_joint_model to run the model for an input
+        concept_num: Which concept neuron number to investigate
+        x: Dataset, as a Tensor
+        input_num: Which data point to plot the saliency for
+        
+    Returns: Nothing
+    
+    Side Effects: Plots a saliency map
+    """
+    
     x.requires_grad = True
 
     y,c = model_function(model,x)
 
-    grads = torch.autograd.grad(c[concept_num], x, grad_outputs=torch.ones_like(c[concept_num]), retain_graph=True)[0]
-
+    grads = torch.autograd.grad(c[concept_num], x, grad_outputs=torch.ones_like(c[concept_num]), retain_graph=True)
+    grads = grads[0]
+    
+    
     saliency_map = F.relu(grads).max(dim=1, keepdim=True)[0]
+    
     saliency_map /= saliency_map.abs().max()
-    saliency_map = saliency_map.detach().cpu().numpy()[0]
+    saliency_map = saliency_map.detach().cpu().numpy()
 
-    plt.imshow(np.transpose(saliency_map,(1,2,0)), cmap='jet')
+    plt.imshow(np.transpose(saliency_map[input_num],(1,2,0)), cmap='jet')
     plt.axis('off')
     plt.show()
+    
+def plot_integrated_gradients(model,model_function,concept_num,x,input_num):
+    """Plot a Saliency Map for Integrated Gradients
+    
+    Arguments:
+        model: Model weights loaded in 
+        model_function: Function such as run_joint_model to run the model for an input
+        concept_num: Which concept neuron number to investigate
+        x: Dataset, as a Tensor
+        input_num: Which data point to plot the saliency for
+        
+    Returns: Nothing
+    
+    Side Effects: Plots a saliency map
+    """
+    
+    x.requires_grad = True
+    input_img = x[input_num:input_num+1]
+    
+    def single_output_forward():
+        def forward(x):
+            y,c = model_function(model,x)
+            return c.T
+        return forward
+    
+    fwd_fn = single_output_forward()
+    integrated_gradients = IntegratedGradients(fwd_fn)
+    attributions_ig = integrated_gradients.attribute(input_img, target = concept_num, n_steps=200)
+    
+    default_cmap = LinearSegmentedColormap.from_list('custom blue',
+                                                     [(0, '#ffffff'),
+                                                      (0.25, '#0000ff'),
+                                                      (1, '#0000ff')], N=256)
+
+    _ = viz.visualize_image_attr(np.transpose(attributions_ig[0].squeeze().cpu().detach().numpy(), (1,2,0)),
+                                 np.transpose(input_img.squeeze().cpu().detach().numpy(), (1,2,0)),
+                                 method='heat_map',
+                                 cmap=default_cmap,
+                                 show_colorbar=True,
+                                 sign='positive',
+                                 title='Integrated Gradients')
+    
+def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list):
+    """Plot a Saliency Map for Integrated Gradients
+    
+    Arguments:
+        model: Model weights loaded in 
+        model_function: Function such as run_joint_model to run the model for an input
+        concept_num: Which concept neuron number to investigate
+        x: Dataset, as a Tensor
+        input_num: Which data point to plot the saliency for
+        img_path: Path to the original image for plotting 
+        
+    Returns: Nothing
+    
+    Side Effects: Plots a GradCAM Heatmap
+    """
+    
+    x.requires_grad = True
+    y,c = model_function(model,x[input_num:input_num+1])
+    conv_output_0 = model.first_model.last_conv_output
+    preds = c.T[:, concept_num]
+
+    grads = torch.autograd.grad(preds, conv_output_0)
+    pooled_grads = grads[0].mean((0,2,3))
+    
+    conv_squeezed = conv_output_0.squeeze()
+    conv_squeezed = F.relu(conv_squeezed)
+    
+    for i in range(len(pooled_grads)):
+        conv_squeezed[i,:,:] *= pooled_grads[i]
+
+    heatmap = conv_squeezed.mean(dim=0).squeeze()
+
+    heatmap = heatmap / torch.max(heatmap)
+    heatmap = heatmap.detach().cpu().numpy()
+        
+    heatmap = np.maximum(heatmap, 0)
+
+    # normalize the heatmap
+    heatmap /= np.max(heatmap)
+
+        
+    img = cv2.imread("../cem/cem/"+pkl_list[input_num]['img_path'])
+    heatmap_cv2 = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    heatmap_cv2 = np.uint8(255 * heatmap_cv2)
+    heatmap_cv2 = cv2.applyColorMap(heatmap_cv2, cv2.COLORMAP_JET)
+    
+    plt.imshow(img)
+    plt.imshow(heatmap_cv2,alpha=0.6)

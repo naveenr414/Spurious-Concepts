@@ -111,11 +111,13 @@ class End2EndModel(torch.nn.Module):
             attr_outputs = [torch.nn.Sigmoid()(o) for o in stage1_out]
         else:
             attr_outputs = stage1_out
-
+            
         stage2_inputs = attr_outputs
         stage2_inputs = torch.cat(stage2_inputs, dim=1)
         all_out = [self.sec_model(stage2_inputs)]
+        
         all_out.extend(stage1_out)
+        
         return all_out
 
     def forward(self, x,binary=False):
@@ -218,6 +220,8 @@ class Inception3(nn.Module):
         self.Mixed_7c = InceptionE(2048)
 
         self.all_fc = nn.ModuleList() #separate fc layer for each prediction task. If main task is involved, it's always the first fc in the list
+        
+        self.last_conv_output = None
 
         if connect_CY:
             self.cy_fc = FC(n_attributes, num_classes, expand_dim)
@@ -290,6 +294,9 @@ class Inception3(nn.Module):
         x = self.Mixed_7b(x)
         # N x 2048 x 8 x 8
         x = self.Mixed_7c(x)
+        
+        self.last_conv_output = x
+        
         # N x 2048 x 8 x 8
         # Adaptive average pooling
         x = F.adaptive_avg_pool2d(x, (1, 1))

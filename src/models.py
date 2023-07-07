@@ -121,6 +121,44 @@ def get_accuracy(model,model_function,dataset):
         
     return correct_datapoints/total_datapoints
 
+def get_concept_accuracy(model,model_function,dataset,sigmoid=False):
+    """Compute the concept accuracy, by computing the MSE Loss, and the rounded 0-1 loss
+        For each concept
+        
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run either the independent or joint model
+        dataset: Data loader for the dataset
+
+    Returns: MSE Loss, 0-1 Loss
+    """
+    
+    total_datapoints = 0
+    mse_loss = 0 
+    zero_one_loss = 0
+    
+    for data in dataset:
+        x,y,c = data
+        c_pred = model_function(model,x)[1].T
+        
+        if sigmoid:
+            c_pred = torch.nn.Sigmoid()(c_pred)
+        
+        c = torch.stack(c).T
+                
+        total_datapoints += len(y)
+        mse_loss += float(torch.norm(c_pred-c)**2)
+        zero_one_loss += float(torch.sum(torch.clip(torch.round(c_pred),0,1) == c))
+        
+    total_datapoints *= c.shape[1]
+        
+    mse_loss /= total_datapoints
+    zero_one_loss /= total_datapoints
+        
+    return mse_loss, zero_one_loss
+
+
+
 def get_accuracy_by_class(model,model_function,dataset):
     """Get the accuracy for each class in a dataset
     
@@ -215,17 +253,19 @@ def get_attribute_class_weights(model,model_function,weights,x,cem=False):
 
     Returns:
         Torch tensors for weights*classes and the predicted concepts
+            This is of size (num_classes x num_concepts x num_data points)
     """
     
     y_pred, c_pred = model_function(model,x)
-    c_pred_copy = c_pred.repeat((200,1,1))
+    num_classes = y_pred.shape[1]
+    c_pred_copy = c_pred.repeat((num_classes,1,1))
     weights_per_class = weights.repeat((c_pred.shape[-1],1,1)).transpose(0, 1).transpose(1, 2)
     weights_per_class = weights_per_class*c_pred_copy
     
     if cem:
-        weights_per_class = torch.split(weights_per_class,split_size_or_sections=113, dim=1)
+        weights_per_class = torch.split(weights_per_class,split_size_or_sections=c_pred.shape[0], dim=1)
         weights_per_class = torch.stack(weights_per_class, dim=0)
         weights_per_class = torch.sum(weights_per_class, axis=0)
 
     
-    return weights_per_class, c_pred
+    return weights_per_class, y_pred, c_pred
