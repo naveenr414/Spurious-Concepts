@@ -186,3 +186,39 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list):
     
     plt.imshow(img)
     plt.imshow(heatmap_cv2,alpha=0.6)
+
+def image_with_borders(img,border_color,left_size,right_size,top_size,bottom_size,in_place=False):
+    """Add a border, with color border_color, to a PyTorch Tensor
+    
+    Arguments:
+        img: Torch Tensor of size (3,width,height)
+        border_color: Torch Tensor of size (3)
+        left_size: Integer, left-width of the border
+        right_size: Integer, right-width of the border
+        top_size: Integer, top-width of the border
+        bottom_size: Integer, bottom-width of the border
+
+    Returns: PyTorch Tensor with Border
+    """
+    
+    _, image_height, image_width  = img.shape
+    ret_tensor = torch.empty((3, 
+                               image_height + top_size + bottom_size, 
+                               image_width + left_size + right_size))
+    _, ret_height, ret_width = ret_tensor.shape
+    
+    if not in_place:
+        ret_tensor[:,top_size:top_size+image_height,left_size:left_size+image_width] = img
+    else:
+        ret_tensor = img
+        ret_tensor[:,top_size:top_size+image_height,left_size:
+                   left_size+image_width] = img[:,top_size:
+                                                top_size+image_height,left_size:left_size+image_width] 
+    
+    # Borders
+    ret_tensor[:,:top_size,:] = border_color.view(3, 1, 1).expand(*ret_tensor[:,:top_size,:].shape)
+    ret_tensor[:,-bottom_size:,:] = border_color.view(3, 1, 1).expand(*ret_tensor[:,-bottom_size:,:].shape)
+    ret_tensor[:,:,:left_size] = border_color.view(3, 1, 1).expand(*ret_tensor[:,:,:left_size].shape)
+    ret_tensor[:,:,-right_size:] = border_color.view(3, 1, 1).expand(*ret_tensor[:,:,-right_size:].shape)
+    
+    return ret_tensor

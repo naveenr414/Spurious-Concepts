@@ -33,8 +33,8 @@ class CUBDataset(Dataset):
         """
         self.data = []
         self.is_train = any(["train" in path for path in pkl_file_paths])
-        if not self.is_train:
-            assert any([("test" in path) or ("val" in path) for path in pkl_file_paths])
+#         if not self.is_train:
+#             assert any([("test" in path) or ("val" in path) for path in pkl_file_paths])
         for file_path in pkl_file_paths:
             self.data.extend(pickle.load(open(file_path, 'rb')))
         self.transform = transform

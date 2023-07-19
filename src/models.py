@@ -121,6 +121,40 @@ def get_accuracy(model,model_function,dataset):
         
     return correct_datapoints/total_datapoints
 
+def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
+    """Compute the concept accuracy, by computing the MSE Loss, for each concept
+        
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run either the independent or joint model
+        dataset: Data loader for the dataset
+
+    Returns: MSE Loss, 0-1 Loss
+    """
+    
+    total_datapoints = 0
+    zero_one_loss = None
+    
+    for data in dataset:
+        x,y,c = data
+        c_pred = model_function(model,x)[1].T
+        
+        if sigmoid:
+            c_pred = torch.nn.Sigmoid()(c_pred)
+        
+        c = torch.stack(c).T
+                
+        total_datapoints += len(y)
+        if zero_one_loss == None:
+            zero_one_loss = torch.Tensor([0.0 for i in range(c.shape[1])])
+            
+        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1) == c,dim=0)
+                
+    zero_one_loss /= total_datapoints
+        
+    return zero_one_loss
+    
+
 def get_concept_accuracy(model,model_function,dataset,sigmoid=False):
     """Compute the concept accuracy, by computing the MSE Loss, and the rounded 0-1 loss
         For each concept
@@ -246,7 +280,7 @@ def get_attribute_class_weights(model,model_function,weights,x,cem=False):
         
     Arguments:
         model: PyTorch model
-        model_function: Function to run the mode, such as run_joint_model
+        model_function: Function to run the model, such as run_joint_model
         weights: Weights from a PyTorch model
         x: Data point to run through the model
         cem: Are we running with a CEM model? 
@@ -269,3 +303,64 @@ def get_attribute_class_weights(model,model_function,weights,x,cem=False):
 
     
     return weights_per_class, y_pred, c_pred
+
+def valid_left_image(image):
+    """
+    Transform an image so it matches training data patterns
+    
+    Arguments:
+        image: PyTorch Tensor of size (3,299,299)
+        
+    Returns: PyTorch Tensor of size (3,299,299)
+    """
+    
+    border_color = torch.Tensor([-0.25,-0.25,-0.25])
+    
+    image[:,:,:150] = 0.25
+    image = image_with_borders(image,border_color,21,22,21,22,in_place=True)
+    return image
+
+def valid_right_image(image):
+    """
+    Transform an image so it matches training data patterns
+    
+    Arguments:
+        image: PyTorch Tensor of size (3,299,299)
+        
+    Returns: PyTorch Tensor of size (3,299,299)
+    """
+    
+    border_color = torch.Tensor([-0.25,-0.25,-0.25])
+    
+    image[:,:,150:] = 0.25
+    image = image_with_borders(image,border_color,21,22,21,22,in_place=True)
+    return image
+
+def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x):
+    """Given a model and a concept number, find a maximally activating image
+    
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run the model, such as run_joint_model
+        concept_num: Integer denoting the number of a particular concept
+        fix_image: Function to transform the image, so solutions 
+        
+    Returns: PyTorch Tensor for an Image
+    """
+    
+    # Set up the optimization process
+    input_image = torch.randn((1, 3, 299, 299), requires_grad=True)
+    optimizer = torch.optim.Adam([input_image], lr=0.01)
+
+    num_steps = 100
+    for step in range(num_steps):
+        optimizer.zero_grad()
+        y_pred,c_pred = model_function(model,input_image)
+        loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
+        loss.backward()
+        optimizer.step()
+                
+        with torch.no_grad():
+            input_image[0] = fix_image(input_image[0])
+
+    return input_image

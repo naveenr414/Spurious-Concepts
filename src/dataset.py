@@ -87,8 +87,34 @@ def create_sample_dataset(name, num_datapoints):
     
     create_preprocessed_files(meta_information,preprocessed_folder,num_train,num_valid,num_test)
 
-    
-def create_synthetic_2_dataset(num_datapoints):
+def draw_square(draw,x_offset,y_offset,square_side):
+    square_color = (0, 0, 255) 
+    square_coords = [(x_offset, y_offset), (x_offset+square_side, y_offset+square_side)]
+    draw.rectangle(square_coords, fill=square_color)
+
+
+def draw_triangle(draw,x_offset,y_offset,triangle_side):
+    triangle_color = (0, 0, 255)  # Blue color
+    triangle_coords = [(x_offset, y_offset), (x_offset+triangle_side, y_offset), (x_offset+triangle_side,triangle_side+y_offset)]
+    draw.polygon(triangle_coords, fill=triangle_color)
+
+def get_offsets(num_objects):
+    if num_objects == 2:
+        return [[0,64],[128,64]]
+    elif num_objects == 4:
+        return [[0,0],[128,0],[0,128],[128,128]]
+    elif num_objects == 8:
+        return [[0,0],[64,0],[128,0],[196,0],[0,128],[64,128],[128,128],[196,128]]
+
+def get_sidelength(num_objects):
+    if num_objects == 2:
+        return 128
+    elif num_objects == 4:
+        return 96
+    elif num_objects == 8:
+        return 56
+
+def create_synthetic_n_dataset(num_datapoints,num_objects):
     """Create a 2 object synthetic dataset with squares and triangles
     
     Arguments:
@@ -101,55 +127,43 @@ def create_synthetic_2_dataset(num_datapoints):
     """
     
     base_folder = "../cem/cem/"
-    name = "synthetic_2"
+    name = "synthetic_{}".format(num_objects)
     create_directory(base_folder+name)
     
     images_folder = base_folder+name+"/images"
     preprocessed_folder = base_folder+name+"/preprocessed"
     create_directory(images_folder)
     create_directory(preprocessed_folder)
-    
-    def draw_square(draw,x_offset):
-        square_side = 128
-        square_color = (0, 0, 255) 
-        square_coords = [(x_offset, 64), (x_offset+square_side, 64+square_side)]
-        draw.rectangle(square_coords, fill=square_color)
-
-
-    def draw_triangle(draw,x_offset):
-        triangle_color = (0, 0, 255)  # Blue color
-        triangle_coords = [(x_offset, 0), (x_offset+128, 0), (x_offset+128,128)]
-        draw.polygon(triangle_coords, fill=triangle_color)
-
+   
     meta_information = []
 
+    object_offsets = get_offsets(num_objects)
+    side_length = get_sidelength(num_objects)
+    
     # Create the images
     for i in range(0, num_datapoints):
-        right_triangle = random.randint(0,1)
-        right_square = 1-right_triangle
-        
-        left_triangle = random.randint(0,1)
-        left_square = 1-left_triangle
+        is_triangle = [random.randint(0,1) for j in range(num_objects)]
+        is_square = [1-j for j in is_triangle]
         
         image = Image.new("RGB", (256, 256), "white")
         draw = ImageDraw.Draw(image)
-
-        if left_triangle:
-            draw_triangle(draw,0)
-        else:
-            draw_square(draw,0)
-
-        if right_triangle:
-            draw_triangle(draw,128)
-        else:
-            draw_square(draw,128)
-            
+        
+        for j in range(num_objects):
+            x_offset,y_offset = object_offsets[j]
+            if is_triangle[j]:
+                draw_triangle(draw,x_offset,y_offset,side_length)
+            else:
+                draw_square(draw,x_offset,y_offset,side_length)
+                    
+        attribute_label = [elem for pair in zip(is_triangle, is_square) for elem in pair]
+                    
         image_path = os.path.join(images_folder, f"{i}.png")
         image.save(image_path)
         
+        label = int(sum(is_square)<num_objects//2)
+        
         meta_information.append({'id': i, 'img_path': '{}/images/{}.png'.format(name,i), 
-                                 'class_label': min(right_square+left_square,1), 'attribute_label': 
-                                 [left_triangle,left_square,right_triangle,right_square]})
+                                 'class_label': label, 'attribute_label': attribute_label})
         
     # Create the preprocessed files
     num_train = num_datapoints//2
@@ -158,19 +172,77 @@ def create_synthetic_2_dataset(num_datapoints):
 
     create_preprocessed_files(meta_information,preprocessed_folder,num_train,num_valid,num_test)
 
+def create_synthetic_n_dataset_extra(num_objects):
+    """Create 6 objects for the 2 object synthetic dataset
+        3 for the left side (square, triangle, fully covered)
+        And ditto for the right side
+    
+    Returns: Nothing
+    
+    Side Effects: Creates a new dataset in ../../cem/
+    """
+    
+    base_folder = "../cem/cem/"
+    name = "synthetic_{}".format(num_objects)
+    create_directory(base_folder+name)
+    
+    images_folder = base_folder+name+"/images"
+    preprocessed_folder = base_folder+name+"/preprocessed"
+    create_directory(images_folder)
+    create_directory(preprocessed_folder)
+            
+    meta_information = []
+    img_num = 2000
+    
+    object_offsets = get_offsets(num_objects)
+    side_length = get_sidelength(num_objects)
+
+    for i in range(num_objects):
+        for is_triangle in range(2):
+            image = Image.new("RGB", (256, 256), "white")
+            draw = ImageDraw.Draw(image)
+
+            for j in range(num_objects):
+                x_offset,y_offset = object_offsets[j]
+                if is_triangle == 1 and i == j:
+                    draw_triangle(draw,x_offset,y_offset,side_length)
+                elif i == j:
+                    draw_square(draw,x_offset,y_offset,side_length)
+                    
+            triangle_attributes = [0 for i in range(num_objects)]
+            square_attributes = [0 for i in range(num_objects)]
+            
+            triangle_attributes[i] = is_triangle
+            square_attributes[i] = 1-is_triangle
+            
+            attribute_label = [elem for pair in zip(triangle_attributes, square_attributes) for elem in pair]
+            meta_information.append({'id': img_num, 'img_path': '{}/images/{}.png'.format(name,img_num), 
+                                     'class_label': 1, 'attribute_label': attribute_label})
+            image_path = os.path.join(images_folder, f"{img_num}.png")
+            image.save(image_path)
+            img_num += 1
+            
+    pickle.dump(meta_information,open(preprocessed_folder+"/extra.pkl","wb"))
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a sample dataset")
     parser.add_argument("-t", "--type", type=str, help="Type of the dataset, such as synthetic_simple, synthetic_2, etc.")
     parser.add_argument("-s", "--name", type=str, help="Name of the dataset", default='default')
     parser.add_argument("-n", "--num_datapoints", type=int, help="Number of datapoints")
+    parser.add_argument("-o", "--num_objects",type=int,help="Number of objects in the dataset")
 
     args = parser.parse_args()
 
-    if args.name is None or args.num_datapoints is None:
+    if args.name is None:
         parser.print_help()
 
     if args.type.lower() == 'synthetic_simple':
         create_sample_dataset(args.name, args.num_datapoints)
     elif args.type.lower() == 'synthetic_2':
         create_synthetic_2_dataset(args.num_datapoints)
+    elif args.type.lower() == 'synthetic_2_extra':
+        create_synthetic_2_dataset_extra()
+    elif args.type.lower() == 'synthetic':
+        create_synthetic_n_dataset(args.num_datapoints,args.num_objects)
+    elif args.type.lower() == 'synthetic_extra':
+        create_synthetic_n_dataset_extra(args.num_objects)
