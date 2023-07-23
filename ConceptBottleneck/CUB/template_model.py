@@ -306,6 +306,9 @@ class Inception3(nn.Module):
         x = x.view(x.size(0), -1)
         # N x 2048
         out = []
+        
+        self.output_before_fc = x
+        
         for fc in self.all_fc:
             out.append(fc(x))
         if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:

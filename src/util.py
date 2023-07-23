@@ -8,6 +8,7 @@ from captum.attr import IntegratedGradients, configure_interpretable_embedding_l
 from captum.attr import visualization as viz
 from matplotlib.colors import LinearSegmentedColormap
 import cv2
+from PIL import Image
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -222,3 +223,21 @@ def image_with_borders(img,border_color,left_size,right_size,top_size,bottom_siz
     ret_tensor[:,:,-right_size:] = border_color.view(3, 1, 1).expand(*ret_tensor[:,:,-right_size:].shape)
     
     return ret_tensor
+
+def add_gaussian_noise(image, std_dev=25):
+    """Add Gaussian Noise to a PIL image with given standard deviation
+    
+    Arguments:
+        image: PIL Image which we're trying to add noise to
+        std_dev: Standard Deviation of the Noise
+        
+    Returns: PIL Image with Gaussian Noise 
+    """
+    
+    image_array = np.array(image)
+    noise = np.random.normal(scale=std_dev, size=image_array.shape)
+    noisy_image_array = image_array + noise
+    noisy_image_array = np.clip(noisy_image_array, 0, 255).astype(np.uint8)
+    noisy_image = Image.fromarray(noisy_image_array)
+
+    return noisy_image

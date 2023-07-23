@@ -336,7 +336,7 @@ def valid_right_image(image):
     image = image_with_borders(image,border_color,21,22,21,22,in_place=True)
     return image
 
-def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x):
+def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0):
     """Given a model and a concept number, find a maximally activating image
     
     Arguments:
@@ -344,6 +344,7 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
         model_function: Function to run the model, such as run_joint_model
         concept_num: Integer denoting the number of a particular concept
         fix_image: Function to transform the image, so solutions 
+        lamb: L2 Regularization term 
         
     Returns: PyTorch Tensor for an Image
     """
@@ -352,15 +353,35 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     input_image = torch.randn((1, 3, 299, 299), requires_grad=True)
     optimizer = torch.optim.Adam([input_image], lr=0.01)
 
-    num_steps = 100
+    num_steps = 300
     for step in range(num_steps):
         optimizer.zero_grad()
         y_pred,c_pred = model_function(model,input_image)
         loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
+        loss += lamb * torch.norm(input_image)
         loss.backward()
         optimizer.step()
-                
+                        
         with torch.no_grad():
             input_image[0] = fix_image(input_image[0])
-
+            
     return input_image
+
+def get_last_filter_activations(model,model_function,x,concept_num):
+    """Given a model, find the activations for the FC layer for a certain concept
+        Using information about the preceding filters
+        
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run the model, such as run_joint_model
+        x: Input image for the function, as a 1xCxHxW image
+        concept_num: Integer denoting the number of a particular concept
+
+    Returns: Numpy array of activations for the last layer
+    """
+    
+    model_function(model,x)
+    activations = model.first_model.all_fc[concept_num].fc.weight * model.first_model.output_before_fc
+    activations = activations.detach().numpy().flatten()
+    
+    return activations

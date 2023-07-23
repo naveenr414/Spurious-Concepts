@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import pickle
 import random
+from util import add_gaussian_noise
 
 def create_directory(path):
     """Create a directory with some path, if it doesn't exist
@@ -87,16 +88,14 @@ def create_sample_dataset(name, num_datapoints):
     
     create_preprocessed_files(meta_information,preprocessed_folder,num_train,num_valid,num_test)
 
-def draw_square(draw,x_offset,y_offset,square_side):
-    square_color = (0, 0, 255) 
+def draw_square(draw,x_offset,y_offset,square_side,color=(0, 0, 255)):
     square_coords = [(x_offset, y_offset), (x_offset+square_side, y_offset+square_side)]
-    draw.rectangle(square_coords, fill=square_color)
+    draw.rectangle(square_coords, fill=color)
 
 
-def draw_triangle(draw,x_offset,y_offset,triangle_side):
-    triangle_color = (0, 0, 255)  # Blue color
+def draw_triangle(draw,x_offset,y_offset,triangle_side,color=(0,0,255)):
     triangle_coords = [(x_offset, y_offset), (x_offset+triangle_side, y_offset), (x_offset+triangle_side,triangle_side+y_offset)]
-    draw.polygon(triangle_coords, fill=triangle_color)
+    draw.polygon(triangle_coords, fill=color)
 
 def get_offsets(num_objects):
     if num_objects == 2:
@@ -114,7 +113,22 @@ def get_sidelength(num_objects):
     elif num_objects == 8:
         return 56
 
-def create_synthetic_n_dataset(num_datapoints,num_objects):
+def get_random_jitter(num_objects):
+    """When adding noise, add a random amount in each direction
+        based on the number of objects
+        
+    Arguments:
+        num_objects: Number of objects for the synthetic dataset
+        
+    Returns: Array with 2 elements: How much objects in the X, Y dimension can be jittered by
+    """
+    
+    if num_objects == 2:
+        return [0,32]
+    else:
+        return [0,0]
+
+def create_synthetic_n_dataset(num_datapoints,num_objects,add_noise=False):
     """Create a 2 object synthetic dataset with squares and triangles
     
     Arguments:
@@ -128,6 +142,9 @@ def create_synthetic_n_dataset(num_datapoints,num_objects):
     
     base_folder = "../cem/cem/"
     name = "synthetic_{}".format(num_objects)
+    if add_noise:
+        name+="_noisy"
+    
     create_directory(base_folder+name)
     
     images_folder = base_folder+name+"/images"
@@ -139,6 +156,7 @@ def create_synthetic_n_dataset(num_datapoints,num_objects):
 
     object_offsets = get_offsets(num_objects)
     side_length = get_sidelength(num_objects)
+    random_jitter = get_random_jitter(num_objects)
     
     # Create the images
     for i in range(0, num_datapoints):
@@ -150,13 +168,25 @@ def create_synthetic_n_dataset(num_datapoints,num_objects):
         
         for j in range(num_objects):
             x_offset,y_offset = object_offsets[j]
+            
+            color = (0,0,255)
+            
+            if add_noise:
+                x_offset += random.randint(-random_jitter[0],random_jitter[0])
+                y_offset += random.randint(-random_jitter[1],random_jitter[1])
+                
+                color = tuple([random.randint(0,255) for i in range(3)])
+            
             if is_triangle[j]:
-                draw_triangle(draw,x_offset,y_offset,side_length)
+                draw_triangle(draw,x_offset,y_offset,side_length,color=color)
             else:
-                draw_square(draw,x_offset,y_offset,side_length)
+                draw_square(draw,x_offset,y_offset,side_length,color=color)
                     
         attribute_label = [elem for pair in zip(is_triangle, is_square) for elem in pair]
                     
+        if add_noise:
+            image = add_gaussian_noise(image,std_dev=25)
+            
         image_path = os.path.join(images_folder, f"{i}.png")
         image.save(image_path)
         
@@ -230,6 +260,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--name", type=str, help="Name of the dataset", default='default')
     parser.add_argument("-n", "--num_datapoints", type=int, help="Number of datapoints")
     parser.add_argument("-o", "--num_objects",type=int,help="Number of objects in the dataset")
+    parser.add_argument("--noise", action="store_true",
+                    help="Add Noise")
+
 
     args = parser.parse_args()
 
@@ -243,6 +276,6 @@ if __name__ == "__main__":
     elif args.type.lower() == 'synthetic_2_extra':
         create_synthetic_2_dataset_extra()
     elif args.type.lower() == 'synthetic':
-        create_synthetic_n_dataset(args.num_datapoints,args.num_objects)
+        create_synthetic_n_dataset(args.num_datapoints,args.num_objects,add_noise=args.noise)
     elif args.type.lower() == 'synthetic_extra':
         create_synthetic_n_dataset_extra(args.num_objects)

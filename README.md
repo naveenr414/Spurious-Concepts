@@ -10,7 +10,8 @@ In this case, `synthetic_simple` is the name of the dataset, with 100 random ima
 To train the synthetic with 8 objects, run the following 
 ```bash
 python src/dataset.py -t synthetic_extra -o 8
-python src/dataset.py -t synthetic -o 8 -n 512
+python src/dataset.py -t synthetic -o 8 -n 512 
+python src/dataset.py -t synthetic -o 8 -n 512 --noise # Adds noise to dataset
 ```
 
 Then to train a CBM model based on this dataset, run the following commmand
