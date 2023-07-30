@@ -135,9 +135,9 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
         transform = transforms.Compose([
             #transforms.Resize((resized_resol, resized_resol)),
             #transforms.RandomSizedCrop(resol),
-            transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
-            transforms.RandomResizedCrop(resol),
-            transforms.RandomHorizontalFlip(),
+            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+            # transforms.RandomResizedCrop(resol),
+            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(), #implicitly divides by 255
             transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
             #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
@@ -145,11 +145,12 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
     else:
         transform = transforms.Compose([
             #transforms.Resize((resized_resol, resized_resol)),
-            transforms.CenterCrop(resol),
+            # transforms.CenterCrop(resol),
             transforms.ToTensor(), #implicitly divides by 255
             transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
             #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
             ])
+
 
     if path_transform == None:
         path_transform = lambda path: "../../cem/cem/"+path

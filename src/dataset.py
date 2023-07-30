@@ -98,6 +98,8 @@ def draw_triangle(draw,x_offset,y_offset,triangle_side,color=(0,0,255)):
     draw.polygon(triangle_coords, fill=color)
 
 def get_offsets(num_objects):
+    if num_objects == 1:
+        return [[0,64]]
     if num_objects == 2:
         return [[0,64],[128,64]]
     elif num_objects == 4:
@@ -106,7 +108,9 @@ def get_offsets(num_objects):
         return [[0,0],[64,0],[128,0],[196,0],[0,128],[64,128],[128,128],[196,128]]
 
 def get_sidelength(num_objects):
-    if num_objects == 2:
+    if num_objects == 1:
+        return 128   
+    elif num_objects == 2:
         return 128
     elif num_objects == 4:
         return 96
@@ -181,7 +185,16 @@ def create_synthetic_n_dataset(num_datapoints,num_objects,add_noise=False):
                 draw_triangle(draw,x_offset,y_offset,side_length,color=color)
             else:
                 draw_square(draw,x_offset,y_offset,side_length,color=color)
-                    
+
+        if num_objects == 1:
+            # Draw an extra square or triangle
+            x_offset, y_offset = get_offsets(2)[1]
+            color = (0,0,255)
+            if random.randint(0,1) == 0:
+                draw_triangle(draw,x_offset,y_offset,side_length,color=color)
+            else:
+                draw_square(draw,x_offset,y_offset,side_length,color=color)
+                
         attribute_label = [elem for pair in zip(is_triangle, is_square) for elem in pair]
                     
         if add_noise:
@@ -190,7 +203,7 @@ def create_synthetic_n_dataset(num_datapoints,num_objects,add_noise=False):
         image_path = os.path.join(images_folder, f"{i}.png")
         image.save(image_path)
         
-        label = int(sum(is_square)<num_objects//2)
+        label = int(sum(is_square)<=num_objects//2)
         
         meta_information.append({'id': i, 'img_path': '{}/images/{}.png'.format(name,i), 
                                  'class_label': label, 'attribute_label': attribute_label})

@@ -1,5 +1,4 @@
-
-from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet
+from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet7
 
 
 # Independent & Sequential Model
@@ -24,13 +23,26 @@ def ModelXtoChat_ChatToY(n_class_attr, n_attributes, num_classes, expand_dim):
 
 # Joint Model
 def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim,
-                 use_relu, use_sigmoid,use_unknown):
+                 use_relu, use_sigmoid,use_unknown,encoder_model):
     
     if use_unknown:
         n_attributes += 1
-    model1 = inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
-                          n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                          three_class=(n_class_attr == 3))
+        
+    if encoder_model == 'inceptionv3':
+        model1 = inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    elif encoder_model == 'small3':
+        model1 = SimpleConvNet(num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    else:
+        raise Exception("{} not found".format(encoder_model))
+        
+#     model1 = SimpleConvNet7(num_classes=num_classes, aux_logits=use_aux,
+#                           n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+#                           three_class=(n_class_attr == 3))
+    
     if n_class_attr == 3:
         model2 = MLP(input_dim=n_attributes * n_class_attr, num_classes=num_classes, expand_dim=expand_dim)
     else:

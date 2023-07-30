@@ -16,7 +16,6 @@ python src/dataset.py -t synthetic -o 8 -n 512 --noise # Adds noise to dataset
 
 Then to train a CBM model based on this dataset, run the following commmand
 ```bash
-bash train_cbm.sh synthetic_8 joint 16 42 1
+python train_cbm.py -dataset synthetic_2 -model_type joint -num_attributes 4 -num_classes 2 -seed 42 -epochs 25 --encoder_model inceptionv3 -lr 0.5
 ```
-where the arguments refer to the number of attributes, seed, and epochs. 
-The resulting model is saved to `results/synthetic_simple/joint`. 
+The resulting model is saved to `results/synthetic_2/joint`. 

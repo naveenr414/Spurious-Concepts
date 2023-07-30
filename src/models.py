@@ -309,9 +309,9 @@ def valid_left_image(image):
     Transform an image so it matches training data patterns
     
     Arguments:
-        image: PyTorch Tensor of size (3,299,299)
+        image: PyTorch Tensor of size (3,256,256)
         
-    Returns: PyTorch Tensor of size (3,299,299)
+    Returns: PyTorch Tensor of size (3,256,256)
     """
     
     border_color = torch.Tensor([-0.25,-0.25,-0.25])
@@ -325,9 +325,9 @@ def valid_right_image(image):
     Transform an image so it matches training data patterns
     
     Arguments:
-        image: PyTorch Tensor of size (3,299,299)
+        image: PyTorch Tensor of size (3,256,256)
         
-    Returns: PyTorch Tensor of size (3,299,299)
+    Returns: PyTorch Tensor of size (3,256,256)
     """
     
     border_color = torch.Tensor([-0.25,-0.25,-0.25])
@@ -350,7 +350,7 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     """
     
     # Set up the optimization process
-    input_image = torch.randn((1, 3, 299, 299), requires_grad=True)
+    input_image = torch.randn((1, 3, 256, 256), requires_grad=True)
     optimizer = torch.optim.Adam([input_image], lr=0.01)
 
     num_steps = 300

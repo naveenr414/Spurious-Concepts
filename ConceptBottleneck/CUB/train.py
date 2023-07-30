@@ -230,6 +230,7 @@ def train(model, args):
         print("On epoch {}".format(epoch))
         train_loss_meter = AverageMeter()
         train_acc_meter = AverageMeter()
+
         if args.no_img:
             train_loss_meter, train_acc_meter = run_epoch_simple(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, args, is_training=True)
         else:
@@ -281,7 +282,9 @@ def train(model, args):
         if epoch - best_val_epoch >= 100:
             print("Early stopping because acc hasn't improved for a long time")
             break
-    print("Saving the model again!")
+
+    print("Saving the model again to {}!".format(args.log_dir))
+    
     torch.save(model, os.path.join(args.log_dir, 'best_model_%d.pth' % args.seed))
             
 def train_X_to_C(args):
@@ -307,7 +310,7 @@ def train_X_to_C_to_y(args):
     model = ModelXtoCtoY(n_class_attr=args.n_class_attr, pretrained=args.pretrained, freeze=args.freeze,
                          num_classes=args.num_classes, use_aux=args.use_aux, n_attributes=args.n_attributes,
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
-                        use_unknown=args.use_unknown)
+                        use_unknown=args.use_unknown,encoder_model=args.encoder_model)
     train(model, args)
 
 def train_X_to_y(args):
@@ -407,6 +410,8 @@ def parse_arguments(experiment):
                             help='Whether to use concepts as auxiliary features (in multitasking) to predict Y')
         parser.add_argument('-num_classes', type=int,default=N_CLASSES,
                             help='How many classes there are for classification')
+        parser.add_argument('-encoder_model',type=str,default='inceptionv3',
+                           help='Which encoder model to use, inceptionv3 or small3')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)
