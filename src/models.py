@@ -313,11 +313,8 @@ def valid_left_image(image):
         
     Returns: PyTorch Tensor of size (3,256,256)
     """
-    
-    border_color = torch.Tensor([-0.25,-0.25,-0.25])
-    
-    image[:,:,:150] = 0.25
-    image = image_with_borders(image,border_color,21,22,21,22,in_place=True)
+
+    image[:,:,:128] = 0.25
     return image
 
 def valid_right_image(image):
@@ -329,11 +326,8 @@ def valid_right_image(image):
         
     Returns: PyTorch Tensor of size (3,256,256)
     """
-    
-    border_color = torch.Tensor([-0.25,-0.25,-0.25])
-    
-    image[:,:,150:] = 0.25
-    image = image_with_borders(image,border_color,21,22,21,22,in_place=True)
+        
+    image[:,:,128:] = 0.25
     return image
 
 def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0):

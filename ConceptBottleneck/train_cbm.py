@@ -95,8 +95,9 @@ def main(args):
             f"-b 64 -weight_decay 0.00004 -lr 0.01 -encoder_model {encoder_model} -num_classes {num_classes} "
             f"-scheduler_step 100 -bottleneck"
         )
-        subprocess.check_output([cmd1], shell=True,stderr=subprocess.STDOUT)
-        subprocess.check_output([cmd2], shell=True,stderr=subprocess.STDOUT)
+        run_command(cmd1)
+        run_command(cmd2)
+
 
     elif model_type == "sequential":
         cmd1 = (

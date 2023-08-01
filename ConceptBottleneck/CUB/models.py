@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet7
+from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7
 
 
 # Independent & Sequential Model
@@ -34,6 +34,22 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
                               three_class=(n_class_attr == 3))
     elif encoder_model == 'small3':
         model1 = SimpleConvNet(num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    elif encoder_model == 'small4':
+        model1 = SimpleConvNet4(num_classes=num_classes, aux_logits=use_aux,
+                        n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                        three_class=(n_class_attr == 3))
+    elif encoder_model == 'small5':
+        model1 = SimpleConvNet5(num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    elif encoder_model == 'small6':
+        model1 = SimpleConvNet6(num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    elif encoder_model == 'small7':
+        model1 = SimpleConvNet7(num_classes=num_classes, aux_logits=use_aux,
                               n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                               three_class=(n_class_attr == 3))
     else:
