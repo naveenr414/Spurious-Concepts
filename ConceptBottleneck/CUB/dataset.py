@@ -119,7 +119,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     def __len__(self):
         return self.num_samples
 
-def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False,is_training=True):
+def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False,is_training=True,resize=True):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
     Loads data with transformations applied, and upsample the minority class if there is class imbalance and weighted loss is not used
@@ -132,23 +132,50 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
         transform = transforms.Compose([transforms.CenterCrop(resol),
             transforms.ToTensor()])
     elif is_training:
-        transform = transforms.Compose([
-            #transforms.Resize((resized_resol, resized_resol)),
-            #transforms.RandomSizedCrop(resol),
-            # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
-            # transforms.RandomResizedCrop(resol),
-            # transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(), #implicitly divides by 255
-            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
-            #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
+        # DEBUG Add the transfomrs.Reszie(resol,resol) in 
+        # So that images will all be 299x299
+        # TODO: Remove this when working with the synthetic dataset
+
+
+        if resize:
+            transform = transforms.Compose([
+                transforms.Resize((resol,resol)),
+                #transforms.RandomSizedCrop(resol),
+                # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+                # transforms.RandomResizedCrop(resol),
+                # transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(), #implicitly divides by 255
+                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
+                ])
+        else:
+            transform = transforms.Compose([
+                transforms.Resize((resol,resol)),
+                #transforms.RandomSizedCrop(resol),
+                # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
+                # transforms.RandomResizedCrop(resol),
+                # transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(), #implicitly divides by 255
+                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
             ])
     else:
-        transform = transforms.Compose([
-            #transforms.Resize((resized_resol, resized_resol)),
-            # transforms.CenterCrop(resol),
-            transforms.ToTensor(), #implicitly divides by 255
-            transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
-            #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
+        if resize: 
+            transform = transforms.Compose([
+                transforms.Resize((resol,resol)),
+                #transforms.Resize((resized_resol, resized_resol)),
+                # transforms.CenterCrop(resol),
+                transforms.ToTensor(), #implicitly divides by 255
+                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
+                ])
+        else:
+            transform = transforms.Compose([
+                #transforms.Resize((resized_resol, resized_resol)),
+                # transforms.CenterCrop(resol),
+                transforms.ToTensor(), #implicitly divides by 255
+                transforms.Normalize(mean = [0.5, 0.5, 0.5], std = [2, 2, 2])
+                #transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ], std = [ 0.229, 0.224, 0.225 ]),
             ])
 
 

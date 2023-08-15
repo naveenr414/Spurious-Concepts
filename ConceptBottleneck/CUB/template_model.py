@@ -192,8 +192,16 @@ class SimpleConvNet(nn.Module):
 
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
-        # Calculate the output size of the last conv layer before the linear layer
-        self.conv_output_size = 256 * 32 * 32  # This may change depending on the input size
+        # TODO: Change this so it's more general
+        # Essentially, for CUB, it uses a 299x299 dataset whereas with 
+        # The other one, we use a 256x256
+        # When we run final experiments, change everything to be 299x299
+
+        if num_classes == 200:
+            self.conv_output_size = 256*37*37
+        else:
+            self.conv_output_size = 256*37*37
+
         self.all_fc = nn.ModuleList()
         
         self.aux_logits = aux_logits
@@ -224,8 +232,7 @@ class SimpleConvNet(nn.Module):
         x = self.pool(torch.relu(self.conv3(x)))
         
         self.last_conv_output = x
-        
-        # Flatten the tensor before passing it through the fully connected layers
+
         x = x.view(-1, self.conv_output_size)
         
         self.output_before_fc = x
@@ -515,6 +522,152 @@ class SimpleConvNet7(nn.Module):
         else:
             return out
 
+class SimpleConvNet7(nn.Module):
+    def __init__(self, num_classes, aux_logits=True, transform_input=False, 
+                 n_attributes=0, bottleneck=False, expand_dim=0, 
+                 three_class=False, connect_CY=False):
+        super(SimpleConvNet7, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv6 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv7 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Calculate the output size of the last conv layer before the linear layer
+        self.conv_output_size = 512 * 2 * 2  # This may change depending on the input size
+        
+        self.all_fc = nn.ModuleList()
+        
+        self.aux_logits = aux_logits
+        self.transform_input = transform_input
+        self.n_attributes = n_attributes
+        self.bottleneck = bottleneck
+        if aux_logits:
+            self.AuxLogits = InceptionAux(768, num_classes, n_attributes=self.n_attributes, bottleneck=bottleneck, \
+                                                expand_dim=expand_dim, three_class=three_class, connect_CY=connect_CY)
+
+        if connect_CY:
+            self.cy_fc = FC(n_attributes, num_classes, expand_dim)
+        else:
+            self.cy_fc = None
+
+            
+        if self.n_attributes > 0:
+            if not bottleneck: #multitasking
+                self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+            for i in range(self.n_attributes):
+                self.all_fc.append(FC(self.conv_output_size, 1, expand_dim))
+        else:
+            self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+
+    def forward(self, x,binary=False):
+        x = self.pool(torch.relu(self.conv1(x)))
+        x = self.pool(torch.relu(self.conv2(x)))
+        x = self.pool(torch.relu(self.conv3(x)))
+        x = self.pool(torch.relu(self.conv4(x)))
+        x = self.pool(torch.relu(self.conv5(x)))
+        x = self.pool(torch.relu(self.conv6(x)))
+        x = self.pool(torch.relu(self.conv7(x)))
+        
+        self.last_conv_output = x
+
+        # Flatten the tensor before passing it through the fully connected layers
+        x = x.view(-1, self.conv_output_size)
+        self.output_before_fc = x
+
+        out = []
+        for fc in self.all_fc:
+            out.append(fc(x))
+        if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
+            attr_preds = torch.cat(out[1:], dim=1)
+            if binary:
+                attr_preds = torch.round(attr_preds).float()
+            
+            out[0] += self.cy_fc(attr_preds)
+        if self.training and self.aux_logits:
+            return out, out
+        else:
+            return out
+
+class SimpleConvNet9(nn.Module):
+    def __init__(self, num_classes, aux_logits=True, transform_input=False, 
+                 n_attributes=0, bottleneck=False, expand_dim=0, 
+                 three_class=False, connect_CY=False):
+        super(SimpleConvNet7, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv6 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv7 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv8 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+        self.conv9 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1)
+
+
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Calculate the output size of the last conv layer before the linear layer
+        self.conv_output_size = 512 * 2 * 2  # This may change depending on the input size
+        
+        self.all_fc = nn.ModuleList()
+        
+        self.aux_logits = aux_logits
+        self.transform_input = transform_input
+        self.n_attributes = n_attributes
+        self.bottleneck = bottleneck
+        if aux_logits:
+            self.AuxLogits = InceptionAux(768, num_classes, n_attributes=self.n_attributes, bottleneck=bottleneck, \
+                                                expand_dim=expand_dim, three_class=three_class, connect_CY=connect_CY)
+
+        if connect_CY:
+            self.cy_fc = FC(n_attributes, num_classes, expand_dim)
+        else:
+            self.cy_fc = None
+
+            
+        if self.n_attributes > 0:
+            if not bottleneck: #multitasking
+                self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+            for i in range(self.n_attributes):
+                self.all_fc.append(FC(self.conv_output_size, 1, expand_dim))
+        else:
+            self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+
+    def forward(self, x,binary=False):
+        x = self.pool(torch.relu(self.conv1(x)))
+        x = self.pool(torch.relu(self.conv2(x)))
+        x = self.pool(torch.relu(self.conv3(x)))
+        x = self.pool(torch.relu(self.conv4(x)))
+        x = self.pool(torch.relu(self.conv5(x)))
+        x = self.pool(torch.relu(self.conv6(x)))
+        x = self.pool(torch.relu(self.conv7(x)))
+        x = self.pool(torch.relu(self.conv8(x)))
+        x = self.pool(torch.relu(self.conv9(x)))
+        
+        self.last_conv_output = x
+
+        # Flatten the tensor before passing it through the fully connected layers
+        x = x.view(-1, self.conv_output_size)
+        self.output_before_fc = x
+
+        out = []
+        for fc in self.all_fc:
+            out.append(fc(x))
+        if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
+            attr_preds = torch.cat(out[1:], dim=1)
+            if binary:
+                attr_preds = torch.round(attr_preds).float()
+            
+            out[0] += self.cy_fc(attr_preds)
+        if self.training and self.aux_logits:
+            return out, out
+        else:
+            return out
         
 class Inception3(nn.Module):
 

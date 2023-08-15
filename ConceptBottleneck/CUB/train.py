@@ -17,7 +17,7 @@ from CUB import probe, tti, gen_cub_synthetic, hyperopt
 from CUB.dataset import load_data, find_class_imbalance
 from CUB.config import BASE_DIR, N_CLASSES, N_ATTRIBUTES, UPWEIGHT_RATIO, MIN_LR, LR_DECAY_SIZE
 from CUB.models import ModelXtoCY, ModelXtoChat_ChatToY, ModelXtoY, ModelXtoC, ModelOracleCtoY, ModelXtoCtoY
-
+from CUB.sam import SAM
 
 def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion, args, is_training):
     """
@@ -58,7 +58,6 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.train()
     else:
         model.eval()
-        
         
     for _, data in enumerate(loader):
         if attr_criterion is None:
@@ -148,10 +147,74 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
             total_loss = sum(losses)
         loss_meter.update(total_loss.item(), inputs.size(0))
         if is_training:
-            optimizer.zero_grad()
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            if type(optimizer) == SAM:
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.first_step(zero_grad=True)
+                
+                # TODO: Clean this code up 
+                if is_training and args.use_aux:
+                    binary = args.train_addition == "binary"
+                    outputs, aux_outputs = model(inputs_var,binary=binary)
+                    losses = []
+                    out_start = 0
+                    
+                    if not args.bottleneck: #loss main is for the main task label (always the first output)
+                        loss_main = 1.0 * criterion(outputs[0], labels_var) + 0.4 * criterion(aux_outputs[0], labels_var)
+                        losses.append(loss_main)
+                        out_start = 1
+                    if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+                        for i in range(len(attr_criterion)):
+                            losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
+                                                                    + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
+                            
+                    if args.train_addition == "alternate_loss":
+                        print("Running alternate loss")
+                        which_loss = epoch%2
+                        if which_loss == 0:
+                            losses = losses[1:]
+                        else:
+                            losses = losses[:1]
+                    if args.train_addition == "concept_loss":
+                        attr_labels_formatted = torch.chunk(attr_labels, chunks=attr_labels.shape[1], dim=1)
+                        attr_labels_formatted = [tensor.view(attr_labels.shape[0], 1).float() for tensor in attr_labels_formatted]
+                        if torch.cuda.is_available():
+                            attr_labels_formatted = [i.cuda() for i in attr_labels_formatted]
+                        
+                        outputs = model.forward_stage2(attr_labels_formatted)
+                        loss_concept = criterion(outputs[0],labels_var)
+                        losses.append(0.5*loss_concept)
+                    
+                else: #testing or no aux logits
+                    outputs = model(inputs_var)
+                    losses = []
+                    out_start = 0
+                    if not args.bottleneck:
+                        loss_main = criterion(outputs[0], labels_var)
+                        losses.append(loss_main)
+                        out_start = 1
+                    if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+                        for i in range(len(attr_criterion)):
+                            losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]))
+
+
+                if attr_criterion is not None:
+                    if args.bottleneck:
+                        total_loss = sum(losses)/ args.n_attributes
+                    else: #cotraining, loss by class prediction and loss by attribute prediction have the same weight
+                        total_loss = losses[0] + sum(losses[1:])
+                        if args.normalize_loss:
+                            total_loss = total_loss / (1 + args.attr_loss_weight * args.n_attributes)
+                else: #finetune
+                    total_loss = sum(losses)
+
+                total_loss.backward() 
+                optimizer.second_step(zero_grad=True)
+            else:
+                optimizer.zero_grad()
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
     return loss_meter, acc_meter
 
 def train(model, args):    
@@ -202,6 +265,8 @@ def train(model, args):
         optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == 'RMSprop':
         optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
+    elif args.optimizer == 'sam':
+        optimizer = SAM(model.parameters(), torch.optim.SGD, lr=args.lr, weight_decay=args.weight_decay, momentum=0.9) 
     else:
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, threshold=0.00001, min_lr=0.00001, eps=1e-08)
