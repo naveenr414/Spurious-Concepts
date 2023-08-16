@@ -9,6 +9,9 @@ from captum.attr import visualization as viz
 from matplotlib.colors import LinearSegmentedColormap
 import cv2
 from PIL import Image
+import os 
+from ConceptBottleneck.CUB.dataset import load_data
+from scipy.stats import wasserstein_distance
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -66,7 +69,7 @@ def new_metadata(dataset,split,unknown=False):
             
     pickle.dump(preprocessed_train,open(file_location,"wb"))
 
-def plot_saliency(model,model_function,concept_num,x,input_num):
+def plot_saliency(model,model_function,concept_num,x,input_num,pkl_list=None,plot=True):
     """Plot a saliency map for a concept number given a model + data point
     
     Arguments:
@@ -94,11 +97,14 @@ def plot_saliency(model,model_function,concept_num,x,input_num):
     saliency_map /= saliency_map.abs().max()
     saliency_map = saliency_map.detach().cpu().numpy()
 
-    plt.imshow(np.transpose(saliency_map[input_num],(1,2,0)), cmap='jet')
-    plt.axis('off')
-    plt.show()
+    if plot:
+        plt.imshow(np.transpose(saliency_map[input_num],(1,2,0)), cmap='jet')
+        plt.axis('off')
+        plt.show()
     
-def plot_integrated_gradients(model,model_function,concept_num,x,input_num):
+    return saliency_map[input_num][0]
+    
+def plot_integrated_gradients(model,model_function,concept_num,x,input_num,pkl_list=None,plot=True):
     """Plot a Saliency Map for Integrated Gradients
     
     Arguments:
@@ -125,21 +131,26 @@ def plot_integrated_gradients(model,model_function,concept_num,x,input_num):
     fwd_fn = single_output_forward()
     integrated_gradients = IntegratedGradients(fwd_fn)
     attributions_ig = integrated_gradients.attribute(input_img, target = concept_num, n_steps=200)
-    
-    default_cmap = LinearSegmentedColormap.from_list('custom blue',
-                                                     [(0, '#ffffff'),
-                                                      (0.25, '#0000ff'),
-                                                      (1, '#0000ff')], N=256)
 
-    _ = viz.visualize_image_attr(np.transpose(attributions_ig[0].squeeze().cpu().detach().numpy(), (1,2,0)),
-                                 np.transpose(input_img.squeeze().cpu().detach().numpy(), (1,2,0)),
-                                 method='heat_map',
-                                 cmap=default_cmap,
-                                 show_colorbar=True,
-                                 sign='positive',
-                                 title='Integrated Gradients')
+    if plot:
+        default_cmap = LinearSegmentedColormap.from_list('custom blue',
+                                                        [(0, '#ffffff'),
+                                                        (0.25, '#0000ff'),
+                                                        (1, '#0000ff')], N=256)
+
+        _ = viz.visualize_image_attr(np.transpose(attributions_ig[0].squeeze().cpu().detach().numpy(), (1,2,0)),
+                                    np.transpose(input_img.squeeze().cpu().detach().numpy(), (1,2,0)),
+                                    method='heat_map',
+                                    cmap=default_cmap,
+                                    show_colorbar=True,
+                                    sign='positive',
+                                    title='Integrated Gradients')
+        
+    output = attributions_ig[0].squeeze().cpu().detach().numpy()
+    output_one_color = output[0]+output[1]+output[2]
+    return output_one_color 
     
-def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list):
+def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list, plot=True):
     """Plot a Saliency Map for Integrated Gradients
     
     Arguments:
@@ -150,7 +161,7 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list):
         input_num: Which data point to plot the saliency for
         img_path: Path to the original image for plotting 
         
-    Returns: Nothing
+    Returns: GradCAM intensities: A Width x Height numpy array
     
     Side Effects: Plots a GradCAM Heatmap
     """
@@ -182,11 +193,15 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list):
         
     img = cv2.imread("../cem/cem/"+pkl_list[input_num]['img_path'])
     heatmap_cv2 = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
-    heatmap_cv2 = np.uint8(255 * heatmap_cv2)
-    heatmap_cv2 = cv2.applyColorMap(heatmap_cv2, cv2.COLORMAP_JET)
+    heatmap_cv2 = np.uint8(255 * heatmap_cv2)/255
+
+    if plot:
+        heatmap_cv2 = cv2.applyColorMap(heatmap_cv2, cv2.COLORMAP_JET)
+
+        plt.imshow(img)
+        plt.imshow(heatmap_cv2,alpha=0.6)
     
-    plt.imshow(img)
-    plt.imshow(heatmap_cv2,alpha=0.6)
+    return heatmap_cv2
 
 def image_with_borders(img,border_color,left_size,right_size,top_size,bottom_size,in_place=False):
     """Add a border, with color border_color, to a PyTorch Tensor
@@ -241,3 +256,130 @@ def add_gaussian_noise(image, std_dev=25):
     noisy_image = Image.fromarray(noisy_image_array)
 
     return noisy_image
+
+def get_data(num_objects,noisy):
+    """Load the Synthetic Dataset for a given number of objects
+
+    Arguments:
+        num_objects: Number of objects in the synthetic dataset (such as 1, 2, 4)
+        noisy: Boolean, whether to load the noisy version of the dataset
+
+    Returns:   
+        train_loader, val_loader (PyTorch Data Loaders) and train_pkl, val_pkl (list of dictionaries)
+    
+    """
+
+    use_attr = True
+    no_img = False
+    batch_size = 64
+    uncertain_labels = False
+    image_dir = 'images'
+    num_class_attr = 2
+    resampling = False
+
+    dataset_name = "synthetic_{}".format(num_objects)
+    if noisy:
+        dataset_name += "_noisy"
+
+    data_dir = "../cem/cem/{}/preprocessed/".format(dataset_name)
+
+    train_data_path = os.path.join(data_dir, 'train.pkl')
+    val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
+    train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=False)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=False)
+
+    train_pkl = pickle.load(open(train_data_path,"rb"))
+    val_pkl = pickle.load(open(val_data_path,"rb"))
+
+    return train_loader, val_loader, train_pkl, val_pkl
+
+def unroll_data(data_loader):
+    """ Take the data in data_loader and turn it into torch Tensors
+
+    Arguments:
+        data_loader: PyTorch data loader
+
+    Returns:
+        PyTorch tensors images (Batch x 3 x width x height), y, c
+
+    """
+
+    val_images = []
+    val_y = []
+    val_c = []
+    for batch in data_loader:
+        x, y, c = batch  
+        val_images.append(x)
+        val_y.append(y)
+        val_c.append(torch.stack(c).T)
+    val_images = torch.cat(val_images, dim=0)
+    val_y = torch.cat(val_y,dim=0)
+    val_c = torch.cat(val_c,dim=0)
+
+    return val_images, val_y, val_c
+
+def get_log_folder(dataset,weight_decay,encoder_model,optimizer):
+    """Get the path to the log folder based on arguments
+    
+    Arguments:
+        dataset: String for which dataset, such as synthetic_2
+        weight_decay: Float, such as 0.004
+        encoder_model: String, such as 'small3'
+        optimizer: String, such as 'sgd'
+    
+    Returns:
+        String, path to the logging folder which contains the joint model
+        
+    """
+
+    if weight_decay == 0.0004 and encoder_model == 'inceptionv3':
+        log_folder = f"results/{dataset}/joint"
+    elif weight_decay == 0.0004:
+        log_folder = f"results/{dataset}/joint_model_{encoder_model}"
+    elif encoder_model == 'inceptionv3':
+        log_folder = f"results/{dataset}/joint_wd_{weight_decay}"
+    else:
+        log_folder = f"results/{dataset}/joint_model_{encoder_model}_wd_{weight_decay}"
+    if optimizer != 'sgd':
+        log_folder += "_opt_{}".format(optimizer)
+    
+    log_folder += '/joint'
+    
+    return log_folder
+
+def get_patches(input_array,k):
+    """Given a numpy array of size n x n, sum over patches of size k
+    
+    Arguments:
+        input_array: Numpy array of size n x n
+        k: Integer path size; n%k = 0
+        
+    Returns: Numpy array of size (n/k,n/k)"""
+
+    patch_sum = np.zeros((input_array.shape[0] // k, input_array.shape[1] // k))
+    
+    for i in range(0, input_array.shape[0], k):
+        for j in range(0, input_array.shape[1], k):
+            patch = input_array[i:i+k, j:j+k]
+            patch_sum[i // k, j // k] = np.sum(patch)
+    
+    return patch_sum
+
+def compute_wasserstein_distance(array1, array2):
+    """Compute the Wasserstein Distance between two arrays
+    
+    Arguments:
+        array1: First numpy array
+        array2: Second numpy array
+    
+    Returns: Float, Wasserstein Distance"""
+
+    # Normalize the arrays to represent probability distributions
+    dist1 = array1 / np.sum(array1)
+    dist2 = array2 / np.sum(array2)
+    
+    # Calculate the Wasserstein distance
+    distance = wasserstein_distance(np.arange(len(dist1)), np.arange(len(dist2)), dist1, dist2)
+    
+    return distance

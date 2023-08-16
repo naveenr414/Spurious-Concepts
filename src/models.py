@@ -1,4 +1,5 @@
 from src.images import *
+from src.util import get_log_folder
 import torch
 from torchvision import transforms
 from cem.models.cem import ConceptEmbeddingModel
@@ -379,3 +380,26 @@ def get_last_filter_activations(model,model_function,x,concept_num):
     activations = activations.detach().numpy().flatten()
     
     return activations
+
+def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer):
+    """Load a Synthetic model for the Sythetic dataset
+    
+    Arguments:
+        num_objects: Which synthetic dataset, such as 1, 2, or 4
+        encoder_model: String, such as 'inceptionv3', 'small3', or 'small7'
+        noisy: Boolean, whether to use the noisy version of the dataset
+        weight_decay: Float, such as 0.004, how much weight_decay the model was trained with
+        optimizer: String, such as 'sgd'
+        
+    Returns: PyTorch model
+    """
+
+    dataset_name = "synthetic_{}".format(num_objects)
+    if noisy:
+        dataset_name += "_noisy"
+
+    log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
+    joint_location = "ConceptBottleneck/{}/best_model_42.pth".format(log_folder)
+    joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
+    r = joint_model.eval()
+    return joint_model
