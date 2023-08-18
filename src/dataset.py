@@ -4,7 +4,7 @@ import numpy as np
 import argparse
 import pickle
 import random
-from util import add_gaussian_noise
+from src.util import add_gaussian_noise
 
 def create_directory(path):
     """Create a directory with some path, if it doesn't exist

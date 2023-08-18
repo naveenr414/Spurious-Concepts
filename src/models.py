@@ -6,6 +6,7 @@ from cem.models.cem import ConceptEmbeddingModel
 import joblib
 from cem.data.CUB200.cub_loader import find_class_imbalance
 from experiments import intervention_utils
+from src.dataset import get_sidelength, get_offsets
 
 def logits_to_index(logits):
     """Convert logits from a models outputs to predicted classes
@@ -304,6 +305,32 @@ def get_attribute_class_weights(model,model_function,weights,x,cem=False):
 
     
     return weights_per_class, y_pred, c_pred
+
+def get_valid_image_function(concept_num,total_concepts):
+    """
+    Transform an image so it matches training data patterns
+    
+    Arguments:
+        concept_num: Which concept we're focusing on
+        total_concepts: Which dataste we're focusing on
+        
+    Returns: A function that erases all non-relevant parts of the image 
+        for that particular function 
+    """
+
+    offset = get_offsets(total_concepts)[concept_num//2]
+    side_length = get_sidelength(total_concepts )
+    
+    x_start, y_start = offset 
+    x_end = x_start + side_length 
+    y_end = y_start + side_length 
+
+    def valid_image_by_concept(image):
+        image[:,y_start:y_end,x_start:x_end] = 0.25 
+
+        return image
+    
+    return valid_image_by_concept 
 
 def valid_left_image(image):
     """

@@ -142,9 +142,9 @@ def plot_integrated_gradients(model,model_function,concept_num,x,input_num,pkl_l
                                     np.transpose(input_img.squeeze().cpu().detach().numpy(), (1,2,0)),
                                     method='heat_map',
                                     cmap=default_cmap,
-                                    show_colorbar=True,
+                                    show_colorbar=False,
                                     sign='positive',
-                                    title='Integrated Gradients')
+                                    title='')
         
     output = attributions_ig[0].squeeze().cpu().detach().numpy()
     output_one_color = output[0]+output[1]+output[2]
@@ -193,7 +193,7 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list, plot=Tru
         
     img = cv2.imread("../cem/cem/"+pkl_list[input_num]['img_path'])
     heatmap_cv2 = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
-    heatmap_cv2 = np.uint8(255 * heatmap_cv2)/255
+    heatmap_cv2 = np.uint8(255 * heatmap_cv2)
 
     if plot:
         heatmap_cv2 = cv2.applyColorMap(heatmap_cv2, cv2.COLORMAP_JET)
