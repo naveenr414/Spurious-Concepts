@@ -408,7 +408,7 @@ def get_last_filter_activations(model,model_function,x,concept_num):
     
     return activations
 
-def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer):
+def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,seed):
     """Load a Synthetic model for the Sythetic dataset
     
     Arguments:
@@ -426,7 +426,7 @@ def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer):
         dataset_name += "_noisy"
 
     log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
-    joint_location = "ConceptBottleneck/{}/best_model_42.pth".format(log_folder)
+    joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
     joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
     r = joint_model.eval()
     return joint_model
