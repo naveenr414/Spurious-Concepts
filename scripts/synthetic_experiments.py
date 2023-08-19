@@ -140,7 +140,7 @@ for concept_num in range(num_objects*2):
     ret_image = get_maximal_activation(joint_model,run_joint_model,concept_num,
                                        get_valid_image_function(concept_num,num_objects))
     activation_values.append (
-        torch.nn.Sigmoid()(run_joint_model(joint_model,ret_image)[1])[0][0].detach().numpy()
+        torch.nn.Sigmoid()(run_joint_model(joint_model,ret_image)[1])[concept_num][0].detach().numpy()
     )
     
     ret_image = ret_image.detach()[0].numpy().transpose((1,2,0))

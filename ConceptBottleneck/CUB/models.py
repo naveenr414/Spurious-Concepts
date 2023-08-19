@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7, SimpleConvNet9
+from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7, SimpleConvNet9, SimpleConvNet7_SoftPlus
 
 
 # Independent & Sequential Model
@@ -50,6 +50,10 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
                               three_class=(n_class_attr == 3))
     elif encoder_model == 'small7':
         model1 = SimpleConvNet7(num_classes=num_classes, aux_logits=use_aux,
+                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                              three_class=(n_class_attr == 3))
+    elif encoder_model == 'small7_softplus':
+        model1 = SimpleConvNet7_SoftPlus(num_classes=num_classes, aux_logits=use_aux,
                               n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                               three_class=(n_class_attr == 3))
     elif encoder_model == 'small9':

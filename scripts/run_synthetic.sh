@@ -21,12 +21,7 @@ python synthetic_experiments.py --num_objects 2 --encoder_model inceptionv3 --no
 # Impact of weight decay 
 echo "Impact of weight decay"
 python synthetic_experiments.py --num_objects 2 --encoder_model inceptionv3 --weight_decay 0.004
-python synthetic_experiments.py --num_objects 2 --encoder_model small3 --weight_decay 0.004
 
 # Impact of optimizer 
-for num_objects in 1 2 4 
-do 
-    echo "SAM $num_objects"
-    python synthetic_experiments.py --num_objects $num_objects --encoder_model small7 --weight_decay 0.0004 --optimizer sam 
-done 
-
+python synthetic_experiments.py --num_objects 4 --encoder_model small3 --weight_decay 0.0004 --optimizer sam 
+python synthetic_experiments.py --num_objects 4 --encoder_model small7 --weight_decay 0.0004 --optimizer sam 
