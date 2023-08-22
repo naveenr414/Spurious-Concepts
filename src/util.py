@@ -12,6 +12,7 @@ from PIL import Image
 import os 
 from ConceptBottleneck.CUB.dataset import load_data
 from scipy.stats import wasserstein_distance
+from copy import deepcopy 
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -98,11 +99,11 @@ def plot_saliency(model,model_function,concept_num,x,input_num,pkl_list=None,plo
     saliency_map = saliency_map.detach().cpu().numpy()
 
     if plot:
-        plt.imshow(np.transpose(saliency_map[input_num],(1,2,0)), cmap='jet')
         plt.axis('off')
-        plt.show()
-    
-    return saliency_map[input_num][0]
+        plt.imshow(np.transpose(saliency_map[input_num],(1,2,0)), cmap='jet')
+        # return np.transpose(saliency_map[input_num],(1,2,0))
+    else:
+        return saliency_map[input_num][0]
     
 def plot_integrated_gradients(model,model_function,concept_num,x,input_num,pkl_list=None,plot=True):
     """Plot a Saliency Map for Integrated Gradients
@@ -138,13 +139,14 @@ def plot_integrated_gradients(model,model_function,concept_num,x,input_num,pkl_l
                                                         (0.25, '#0000ff'),
                                                         (1, '#0000ff')], N=256)
 
-        _ = viz.visualize_image_attr(np.transpose(attributions_ig[0].squeeze().cpu().detach().numpy(), (1,2,0)),
+        v = viz.visualize_image_attr(np.transpose(attributions_ig[0].squeeze().cpu().detach().numpy(), (1,2,0)),
                                     np.transpose(input_img.squeeze().cpu().detach().numpy(), (1,2,0)),
                                     method='heat_map',
                                     cmap=default_cmap,
                                     show_colorbar=False,
                                     sign='positive',
                                     title='')
+        return v
         
     output = attributions_ig[0].squeeze().cpu().detach().numpy()
     output_one_color = output[0]+output[1]+output[2]
@@ -294,6 +296,38 @@ def get_data(num_objects,noisy):
 
     return train_loader, val_loader, train_pkl, val_pkl
 
+def get_data_by_name(dataset_name):
+    """Load a dataset by name
+
+    Arguments:
+        dataset_name: Which dataset to load
+
+    Returns:   
+        train_loader, val_loader (PyTorch Data Loaders) and train_pkl, val_pkl (list of dictionaries)
+    
+    """
+
+    use_attr = True
+    no_img = False
+    batch_size = 64
+    uncertain_labels = False
+    image_dir = 'images'
+    num_class_attr = 2
+    resampling = False
+
+    data_dir = "../cem/cem/{}/preprocessed/".format(dataset_name)
+
+    train_data_path = os.path.join(data_dir, 'train.pkl')
+    val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
+    train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=True)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=True)
+
+    train_pkl = pickle.load(open(train_data_path,"rb"))
+    val_pkl = pickle.load(open(val_data_path,"rb"))
+
+    return train_loader, val_loader, train_pkl, val_pkl
+
 def unroll_data(data_loader):
     """ Take the data in data_loader and turn it into torch Tensors
 
@@ -383,3 +417,183 @@ def compute_wasserstein_distance(array1, array2):
     distance = wasserstein_distance(np.arange(len(dist1)), np.arange(len(dist2)), dist1, dist2)
     
     return distance
+
+def unnormalize_image(img):
+    """Given a numpy array, unnnormalize it from the PyTorch transformations
+    
+    Arguments:  
+        img: Image transformed by PyTorch, as a numpy array
+    
+    Returns: Numpy array, which undoes the normalization"""
+
+    mean = np.array([0.5, 0.5, 0.5])
+    std = np.array([2, 2, 2])
+
+    unnormalized_image = img * std[:, np.newaxis, np.newaxis] + mean[:, np.newaxis, np.newaxis]
+    unnormalized_image = unnormalized_image*255 
+    unnormalized_image = np.clip(unnormalized_image, 0, 255).astype(np.uint8) 
+
+    return unnormalized_image.transpose((1,2,0))
+
+def numpy_to_pil(img):
+    """Convert an image, img from a Numpy transformed image to PIl
+    
+    Arguments:
+        img: Image transformed by PyTorch
+    
+    Returns: PIL image"""
+
+    mean = np.array([0.5, 0.5, 0.5])
+    std = np.array([2, 2, 2])
+
+    unnormalized_image = img * std[:, np.newaxis, np.newaxis] + mean[:, np.newaxis, np.newaxis]
+    unnormalized_image = unnormalized_image*255 
+    unnormalized_image = np.clip(unnormalized_image, 0, 255).astype(np.uint8) 
+    im = Image.fromarray(unnormalized_image.transpose(1,2,0))
+    return im
+
+
+def get_image_dimensions(image_path):
+    """Given an image path, find the width, height of the image 
+    
+    Arguments:
+        image_path: String location to an image
+        
+    Returns: width and height of the image"""
+
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            return width, height
+    except Exception as e:
+        print("Error:", e)
+        return None
+
+def convert_point(x,y,width,height,new_width=299,new_height=299):
+    """Given a point (x,y) in some image with width x height, 
+        Convert the new location in an image with new_width x new_height
+        
+    Arguments:
+        x: Integer
+        y: Integer
+        width: Integer
+        Height: Integer
+        new_width: Integer, size of the new image
+        new_height: Integer, size of the new image
+
+    Returns: (x,y), two integers"""
+
+    return int(x*new_width/width),int(y*new_height/height)
+
+def get_part_location(data_point, attribute_num, locations_by_image, val_pkl):
+    """Get the new location of a body part for a specific CUB image
+
+    Arguments:
+        data_point: Integer, which data point to look at
+        attribute_num: Integer, which attribute to look at 
+        locations_by_image: Dictionary of part locations 
+        val_pkl: List of dictionaries with metadata for images
+
+    Returns: Tuple with the new (x,y) for that particular attribute
+    """
+
+    width, height = get_image_dimensions('../cem/cem/{}'.format(val_pkl[data_point]['img_path']))
+    x,y = locations_by_image[val_pkl[data_point]['id']][attribute_num] 
+    new_point = convert_point(x,y,width,height)
+
+    return new_point 
+
+def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=10):
+    """Given a PyTorch array img, fill in black at points closest to the attribute
+    
+    Arguments: 
+        img: PyTorch Tensor
+        location: Tuple with (x,y) 
+        other_locations: List of tuples for the other parts
+        color: 3-Tuple with the color to fill in
+        Epsilon: How large the circle should be
+        
+    Returns: New PyTorch Tensor"""
+
+    # TODO: Make this more general
+    color = (np.array(color)-0.5)/2
+
+    for x in range(location[0]-epsilon,location[0]+epsilon+1):
+        for y in range(location[1]-epsilon,location[1]+epsilon+1):
+            dist = (x-location[0])**2 + (y-location[1])**2
+            if dist < epsilon**2:
+                if x<0 or y<0 or x>=299 or y >=299:
+                    continue 
+                for (x_,y_) in other_locations:
+                    dist_ = (x_-x)**2 + (y_-y)**2
+                    if dist_ <= dist:
+                        break
+                else:
+                    for k in range(3):
+                        img[k,y,x] = color[k]
+    return img 
+
+def mask_image_location(img, location, color=(0,0,0), epsilon=10):
+    """Given a PyTorch array img, fill in a circle centered at location with color
+    
+    Arguments: 
+        img: PyTorch Tensor
+        location: Tuple with (x,y) 
+        color: 3-Tuple with the color to fill in
+        Epsilon: How large the circle should be
+        
+    Returns: New PyTorch Tensor"""
+
+    # TODO: Make this more general
+    color = (np.array(color)-0.5)/2
+
+    for x in range(location[0]-epsilon,location[0]+epsilon+1):
+        for y in range(location[1]-epsilon,location[1]+epsilon+1):
+            if (x-location[0])**2 + (y-location[1])**2 < epsilon**2:
+                if x<0 or y<0 or x>=299 or y >=299:
+                    continue 
+
+                for k in range(3):
+                    img[k,y,x] = color[k]
+
+    return img 
+
+def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images,color=(0,0,0),epsilon=10):
+    """Create a new image with a specific part masked out by the color
+        within some radius epsilon  
+    
+    Arguments:
+        data_point: Integer, which data point to look at
+        attribute_num: Integer, which attribute to look at 
+        locations_by_image: Dictionary of part locations 
+        val_pkl: List of dictionaries with metadata for images
+        val_images: Torch tensor of all image pixels
+        color: Color to show instead of the part
+        epsilon: Radus around which to cover up the part 
+        
+    Returns: PyTorch Tensor of the covered up image"""
+
+
+    part_location = get_part_location(data_point,attribute_num, locations_by_image, val_pkl)
+    img_val = deepcopy(val_images[data_point])
+
+    return mask_image_location(img_val,part_location,epsilon=epsilon,color=color) 
+
+def visualize_part(data_point, part_num, epsilon, locations_by_image, val_pkl, val_images):
+    """Visualize the masking algorithm for some specific data point 
+    
+    Arguments:
+        data_point: Integer, which data point to look at
+        attribute_num: Integer, which attribute to look at 
+        locations_by_image: Dictionary of part locations 
+        val_pkl: List of dictionaries with metadata for images
+        val_images: Torch tensor of all image pixels
+        
+    Returns: Nothing
+
+    Side Effects: Plots image with part covered up"""
+
+    new_img = mask_part(data_point,part_num,locations_by_image, val_pkl, val_images,epsilon=epsilon)
+
+    _,ax = plt.subplots(1)
+    ax.imshow(unnormalize_image(new_img.detach().numpy()))

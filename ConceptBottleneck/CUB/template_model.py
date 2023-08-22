@@ -143,7 +143,7 @@ class MLP(nn.Module):
         else: 
             self.linear = nn.Linear(input_dim, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, binary=False):
         x = self.linear(x)
         if hasattr(self, 'expand_dim') and self.expand_dim:
             x = self.activation(x)
@@ -652,7 +652,7 @@ class SimpleConvNet7_SoftPlus(nn.Module):
         self.output_before_fc = x
 
         out = []
-        for fc in self.all_fc:
+        for fc in self.all_fc: 
             out.append(fc(x))
         if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
             attr_preds = torch.cat(out[1:], dim=1)

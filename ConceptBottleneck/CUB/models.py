@@ -60,13 +60,12 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
         model1 = SimpleConvNet9(num_classes=num_classes, aux_logits=use_aux,
                               n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                               three_class=(n_class_attr == 3))
+    elif encoder_model == 'mlp':
+        # TODO: Make this more general 
+        model1 = MLP(299,num_classes,expand_dim)
     else:
         raise Exception("{} not found".format(encoder_model))
-        
-#     model1 = SimpleConvNet7(num_classes=num_classes, aux_logits=use_aux,
-#                           n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-#                           three_class=(n_class_attr == 3))
-    
+            
     if n_class_attr == 3:
         model2 = MLP(input_dim=n_attributes * n_class_attr, num_classes=num_classes, expand_dim=expand_dim)
     else:

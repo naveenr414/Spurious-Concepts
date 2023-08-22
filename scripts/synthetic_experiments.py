@@ -1,3 +1,20 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: light
+#       format_version: '1.5'
+#       jupytext_version: 1.15.0
+#   kernelspec:
+#     display_name: Python 3 (ipykernel)
+#     language: python
+#     name: python3
+# ---
+
+# %load_ext autoreload
+# %autoreload 2
+
 import os
 os.chdir('../')
 
@@ -20,18 +37,15 @@ import cv2
 from copy import copy 
 import itertools
 import json
+import argparse 
+
+from ConceptBottleneck.CUB.models import ModelXtoC, ModelOracleCtoY
+from ConceptBottleneck.CUB.dataset import load_data
 
 from src.images import *
 from src.util import *
 from src.models import *
 from src.plot import *
-
-from ConceptBottleneck.CUB.models import ModelXtoC, ModelOracleCtoY
-from ConceptBottleneck.CUB.dataset import load_data
-
-
-
-import argparse
 
 # ## Set up dataset + model
 
@@ -56,6 +70,13 @@ weight_decay = args.weight_decay
 encoder_model = args.encoder_model
 optimizer = args.optimizer
 seed = args.seed
+
+# num_objects = 1
+# noisy=False
+# weight_decay = 0.0004
+# encoder_model='small7_softplus'
+# optimizer = 'sgd'
+# seed = 42
 
 results_folder = "results/synthetic/objects={}_noisy={}_wd={}_model={}_optimizer={}_seed={}".format(
     num_objects,noisy,weight_decay,encoder_model,optimizer,seed
@@ -125,11 +146,13 @@ c = np.round(c,3)
 # ### Maximal Activation
 
 def numpy_to_pil(img):
-    img = img.clip(0.25)
-    img -= np.min(img)
-    img /= (np.max(img)-np.min(img))
-    im = Image.fromarray((img* 256).astype(np.uint8))
+    mean = np.array([0.5, 0.5, 0.5])
+    std = np.array([2, 2, 2])
 
+    unnormalized_image = img * std[:, np.newaxis, np.newaxis] + mean[:, np.newaxis, np.newaxis]
+    unnormalized_image = unnormalized_image*255 
+    unnormalized_image = np.clip(unnormalized_image, 0, 255).astype(np.uint8) 
+    im = Image.fromarray(unnormalized_image.transpose(1,2,0))
     return im
 
 
@@ -138,12 +161,12 @@ activation_values = []
 
 for concept_num in range(num_objects*2):
     ret_image = get_maximal_activation(joint_model,run_joint_model,concept_num,
-                                       get_valid_image_function(concept_num,num_objects))
+                                       get_valid_image_function(concept_num,num_objects,epsilon=32))
     activation_values.append (
         torch.nn.Sigmoid()(run_joint_model(joint_model,ret_image)[1])[concept_num][0].detach().numpy()
     )
     
-    ret_image = ret_image.detach()[0].numpy().transpose((1,2,0))
+    ret_image = ret_image.detach()[0].numpy()
     im = numpy_to_pil(ret_image) 
     im.save("{}/{}.png".format(results_folder,"adversarial_{}".format(concept_num)))
 
@@ -212,8 +235,8 @@ modified_combo = deepcopy(combo_original)
 for j in range(grid_size):
     modified_combo[j][-1] = 0
 
-im_original = numpy_to_pil(combo_to_image(combo_original).detach().numpy().transpose((1,2,0)))
-im_final = numpy_to_pil(combo_to_image(modified_combo).detach().numpy().transpose((1,2,0)))
+im_original = numpy_to_pil(combo_to_image(combo_original).detach().numpy())
+im_final = numpy_to_pil(combo_to_image(modified_combo).detach().numpy())
 
 im_original.save("{}/{}.png".format(results_folder,'original_combo'))
 im_final.save("{}/{}.png".format(results_folder,'modified_combo'))
@@ -225,15 +248,25 @@ for method, method_name in zip(
     ['gradcam','integrated_gradients','saliency']
 ):
     plt.axis('off')
-    method(joint_model,run_joint_model,0,val_images,0,val_pkl)
-    plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+    ret = method(joint_model,run_joint_model,0,val_images,0,val_pkl)
+
+    if method_name == 'integrated_gradients':
+        ret[0].savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+    else:
+        plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
 
 final_data = {
-    'train_accuracy': float(train_acc), 
-    'val_accuracy': float(val_acc), 
+    'train_accuracy': train_acc, 
+    'val_accuracy': val_acc, 
     'concept_accuracy': accuracy_by_concept_train.tolist(), 
     'adversarial_activations': np.array(activation_values).tolist(),  
     'grid_dif': float(max_dif), 
+    'num_objects': num_objects, 
+    'noisy': noisy,
+    'weight_decay': weight_decay,
+    'encoder_model': encoder_model, 
+    'optimizer': optimizer, 
+    'seed': seed,
 }
 
 json.dump(final_data,open("{}/results.json".format(results_folder),"w"))

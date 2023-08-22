@@ -306,13 +306,14 @@ def get_attribute_class_weights(model,model_function,weights,x,cem=False):
     
     return weights_per_class, y_pred, c_pred
 
-def get_valid_image_function(concept_num,total_concepts):
+def get_valid_image_function(concept_num,total_concepts,epsilon=0):
     """
     Transform an image so it matches training data patterns
     
     Arguments:
         concept_num: Which concept we're focusing on
         total_concepts: Which dataste we're focusing on
+        epsilon: How much to add to the bounding box
         
     Returns: A function that erases all non-relevant parts of the image 
         for that particular function 
@@ -324,6 +325,16 @@ def get_valid_image_function(concept_num,total_concepts):
     x_start, y_start = offset 
     x_end = x_start + side_length 
     y_end = y_start + side_length 
+
+    x_start -= epsilon
+    y_start -= epsilon 
+    x_end += epsilon 
+    y_end += epsilon 
+
+    x_start = max(x_start,0)
+    y_start = max(y_start,0)
+    x_end = min(x_end,256)
+    y_end = min(y_end,256)
 
     def valid_image_by_concept(image):
         image[:,y_start:y_end,x_start:x_end] = 0.25 
@@ -424,6 +435,24 @@ def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,s
     dataset_name = "synthetic_{}".format(num_objects)
     if noisy:
         dataset_name += "_noisy"
+
+    log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
+    joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
+    joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
+    r = joint_model.eval()
+    return joint_model
+
+def get_model_by_name(dataset_name,encoder_model,weight_decay,optimizer,seed):
+    """Load a Model by Name, for CUB
+    
+    Arguments:
+        dataset_name: Which synthetic dataset, such as 1, 2, or 4
+        encoder_model: String, such as 'inceptionv3', 'small3', or 'small7'
+        weight_decay: Float, such as 0.004, how much weight_decay the model was trained with
+        optimizer: String, such as 'sgd'
+        
+    Returns: PyTorch model
+    """
 
     log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
     joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
