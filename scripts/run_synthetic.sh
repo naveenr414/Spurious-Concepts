@@ -30,3 +30,8 @@ python synthetic_experiments.py --num_objects 2 --encoder_model inceptionv3 --we
 # Impact of optimizer 
 python synthetic_experiments.py --num_objects 4 --encoder_model small3 --weight_decay 0.0004 --optimizer sam 
 python synthetic_experiments.py --num_objects 4 --encoder_model small7 --weight_decay 0.0004 --optimizer sam 
+
+for i in 0 2 5 10 15 20 25
+do 
+    python synthetic_experiments.py --num_objects 1 --encoder_model mlp_$i  
+done 

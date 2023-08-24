@@ -259,7 +259,7 @@ def add_gaussian_noise(image, std_dev=25):
 
     return noisy_image
 
-def get_data(num_objects,noisy):
+def get_data(num_objects,noisy,encoder_model="small3"):
     """Load the Synthetic Dataset for a given number of objects
 
     Arguments:
@@ -278,6 +278,7 @@ def get_data(num_objects,noisy):
     image_dir = 'images'
     num_class_attr = 2
     resampling = False
+    resize = "inceptionv3" in encoder_model
 
     dataset_name = "synthetic_{}".format(num_objects)
     if noisy:
@@ -288,8 +289,8 @@ def get_data(num_objects,noisy):
     train_data_path = os.path.join(data_dir, 'train.pkl')
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
     train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
-                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=False)
-    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=False)
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=resize)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=resize)
 
     train_pkl = pickle.load(open(train_data_path,"rb"))
     val_pkl = pickle.load(open(val_data_path,"rb"))
@@ -597,3 +598,32 @@ def visualize_part(data_point, part_num, epsilon, locations_by_image, val_pkl, v
 
     _,ax = plt.subplots(1)
     ax.imshow(unnormalize_image(new_img.detach().numpy()))
+
+def hamming_distance(str1, str2,diff_names=[],ret_diff=False):
+    """Hamming Distance between two strings 
+    
+    Arguments:
+        str1: 1st string for Hamming distance
+        str2: 2nd string for Hamming distance
+        
+    Returns: Integer, Hamming distance between two strings"""
+
+    if len(str1) != len(str2):
+        raise ValueError("Strings must have equal length")
+
+    if ret_diff:
+        ret_array = []
+    distance = 0
+    idx = 0
+    for char1, char2 in zip(str1, str2):
+        if char1 != char2:
+            distance += 1
+
+            if ret_diff:
+                ret_array.append(diff_names[idx])
+        idx += 1
+
+    if not ret_diff:            
+        return distance
+    else:
+        return distance, ret_array

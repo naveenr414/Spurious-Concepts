@@ -45,14 +45,19 @@ def get_log_folder(args):
     Returns: String containing the name of the folder
     """
 
+    encoder_model = args.encoder_model
+
+    if encoder_model == 'mlp':
+        encoder_model += "_{}".format(args.expand_dim_encoder)
+
     if args.weight_decay == 0.0004 and args.encoder_model == 'inceptionv3':
         log_folder = f"results/{args.dataset}/{args.model_type}"
     elif args.encoder_model == 'inceptionv3':
         log_folder = f"results/{args.dataset}/{args.model_type}_wd_{args.weight_decay}"
     elif args.weight_decay == 0.0004:
-        log_folder = f"results/{args.dataset}/{args.model_type}_model_{args.encoder_model}"
+        log_folder = f"results/{args.dataset}/{args.model_type}_model_{encoder_model}"
     else:
-        log_folder = f"results/{args.dataset}/{args.model_type}_model_{args.encoder_model}_wd_{args.weight_decay}"
+        log_folder = f"results/{args.dataset}/{args.model_type}_model_{encoder_model}_wd_{args.weight_decay}"
     
     if args.optimizer != 'sgd':
         log_folder += "_opt_{}".format(args.optimizer)
@@ -80,6 +85,7 @@ def main(args):
     weight_decay = args.weight_decay
     attr_loss_weight = args.attr_loss_weight
     optimizer = args.optimizer
+    expand_dim_encoder = args.expand_dim_encoder
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -133,7 +139,8 @@ def main(args):
             f"-e {epochs} -optimizer {optimizer} -pretrained -use_aux -weighted_loss multiple -use_attr "
             f"-data_dir ../../cem/cem/{dataset}/preprocessed -n_attributes {num_attributes} "
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 64 -weight_decay {weight_decay} -num_classes {num_classes} "
-            f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid"
+            f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid "
+            f"-expand_dim_encoder {expand_dim_encoder}"
         )
         
         run_command(cmd)
@@ -160,5 +167,6 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, help="Weight decay", default=0.0004)
     parser.add_argument('--attr_loss_weight',type=float,default=1.0,help='Amount of weight to put on the concept loss')
     parser.add_argument('--optimizer',type=str,default='sgd',help='Which optimizer to use')
+    parser.add_argument('--expand_dim_encoder',type=int,help="Expand Dim for the encoder MLP",default=0)
     args = parser.parse_args()
     main(args)

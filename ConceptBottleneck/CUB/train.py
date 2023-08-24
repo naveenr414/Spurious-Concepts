@@ -93,6 +93,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 losses.append(loss_main)
                 out_start = 1
             if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+                                
                 for i in range(len(attr_criterion)):
                     losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
                                                             + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
@@ -280,12 +281,12 @@ def train(model, args):
 
     if args.ckpt: #retraining
         train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name)
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
         val_loader = None
     else:        
         train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name)
-        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name)
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
+        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
     
     best_val_epoch = -1
     best_val_loss = float('inf')
@@ -375,7 +376,7 @@ def train_X_to_C_to_y(args):
     model = ModelXtoCtoY(n_class_attr=args.n_class_attr, pretrained=args.pretrained, freeze=args.freeze,
                          num_classes=args.num_classes, use_aux=args.use_aux, n_attributes=args.n_attributes,
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
-                        use_unknown=args.use_unknown,encoder_model=args.encoder_model)
+                        use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder)
     train(model, args)
 
 def train_X_to_y(args):
@@ -477,6 +478,8 @@ def parse_arguments(experiment):
                             help='How many classes there are for classification')
         parser.add_argument('-encoder_model',type=str,default='inceptionv3',
                            help='Which encoder model to use, inceptionv3 or small3')
+        parser.add_argument('-expand_dim_encoder',type=int,default=0,
+                           help='When using an MLP, what should the expand dim of the encoder be')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)

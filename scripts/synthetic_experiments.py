@@ -89,7 +89,7 @@ if not os.path.exists(results_folder):
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-train_loader, val_loader, train_pkl, val_pkl = get_data(num_objects, noisy)
+train_loader, val_loader, train_pkl, val_pkl = get_data(num_objects, noisy,encoder_model)
 val_images, val_y, val_c = unroll_data(val_loader)
 
 joint_model = get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,seed)
@@ -243,17 +243,18 @@ im_final.save("{}/{}.png".format(results_folder,'modified_combo'))
 
 # ### Saliency Maps
 
-for method, method_name in zip(
-    [plot_gradcam,plot_integrated_gradients,plot_saliency],
-    ['gradcam','integrated_gradients','saliency']
-):
-    plt.axis('off')
-    ret = method(joint_model,run_joint_model,0,val_images,0,val_pkl)
+if 'mlp' not in encoder_model:
+    for method, method_name in zip(
+        [plot_gradcam,plot_integrated_gradients,plot_saliency],
+        ['gradcam','integrated_gradients','saliency']
+    ):
+        plt.axis('off')
+        ret = method(joint_model,run_joint_model,0,val_images,0,val_pkl)
 
-    if method_name == 'integrated_gradients':
-        ret[0].savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
-    else:
-        plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+        if method_name == 'integrated_gradients':
+            ret[0].savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+        else:
+            plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
 
 final_data = {
     'train_accuracy': train_acc, 

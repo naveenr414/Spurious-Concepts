@@ -23,7 +23,7 @@ def ModelXtoChat_ChatToY(n_class_attr, n_attributes, num_classes, expand_dim):
 
 # Joint Model
 def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim,
-                 use_relu, use_sigmoid,use_unknown,encoder_model):
+                 use_relu, use_sigmoid,use_unknown,encoder_model,expand_dim_encoder=0):
     
     if use_unknown:
         n_attributes += 1
@@ -62,7 +62,7 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
                               three_class=(n_class_attr == 3))
     elif encoder_model == 'mlp':
         # TODO: Make this more general 
-        model1 = MLP(299,num_classes,expand_dim)
+        model1 = MLP(299**2*3,n_attributes,expand_dim_encoder,encoder_model=True)
     else:
         raise Exception("{} not found".format(encoder_model))
             

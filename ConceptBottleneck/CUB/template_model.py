@@ -113,6 +113,7 @@ class End2EndModel(torch.nn.Module):
             attr_outputs = stage1_out
             
         stage2_inputs = attr_outputs
+
         stage2_inputs = torch.cat(stage2_inputs, dim=1)
         all_out = [self.sec_model(stage2_inputs)]
         
@@ -133,9 +134,14 @@ class End2EndModel(torch.nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, num_classes, expand_dim):
+    def __init__(self, input_dim, num_classes, expand_dim,encoder_model=False):
         super(MLP, self).__init__()
+        self.input_image_size = 256
         self.expand_dim = expand_dim
+
+        if encoder_model:
+            input_dim = 3*self.input_image_size**2
+
         if self.expand_dim:
             self.linear = nn.Linear(input_dim, expand_dim)
             self.activation = torch.nn.ReLU()
@@ -143,12 +149,24 @@ class MLP(nn.Module):
         else: 
             self.linear = nn.Linear(input_dim, num_classes)
 
+        self.encoder_model = encoder_model
+
     def forward(self, x, binary=False):
+        if self.encoder_model:
+            x = x.view(x.shape[0],3*self.input_image_size**2)
+
         x = self.linear(x)
         if hasattr(self, 'expand_dim') and self.expand_dim:
             x = self.activation(x)
             x = self.linear2(x)
-        return x
+        if self.encoder_model:
+            x = [x[:,i].reshape((len(x),1)) for i in range(x.shape[1])]
+            if self.training:
+                return x, x
+            else:
+                return x
+        else:
+            return x
 
 
 def inception_v3(pretrained, freeze, **kwargs):

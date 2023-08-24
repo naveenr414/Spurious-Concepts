@@ -150,7 +150,7 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
                 ])
         else:
             transform = transforms.Compose([
-                transforms.Resize((resol,resol)),
+                # transforms.Resize((resol,resol)),
                 #transforms.RandomSizedCrop(resol),
                 # transforms.ColorJitter(brightness=32/255, saturation=(0.5, 1.5)),
                 # transforms.RandomResizedCrop(resol),

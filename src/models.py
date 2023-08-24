@@ -369,7 +369,7 @@ def valid_right_image(image):
     image[:,:,128:] = 0.25
     return image
 
-def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0):
+def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0,image_size=256):
     """Given a model and a concept number, find a maximally activating image
     
     Arguments:
@@ -383,7 +383,7 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     """
     
     # Set up the optimization process
-    input_image = torch.randn((1, 3, 256, 256), requires_grad=True)
+    input_image = torch.randn((1, 3, image_size,image_size), requires_grad=True)
     optimizer = torch.optim.Adam([input_image], lr=0.01)
 
     num_steps = 300
@@ -439,6 +439,10 @@ def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,s
     log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
     joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
     joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
+
+    if 'mlp' in encoder_model:
+        joint_model.encoder_model = True
+
     r = joint_model.eval()
     return joint_model
 
