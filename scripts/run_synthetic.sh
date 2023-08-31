@@ -31,7 +31,21 @@ python synthetic_experiments.py --num_objects 2 --encoder_model inceptionv3 --we
 python synthetic_experiments.py --num_objects 4 --encoder_model small3 --weight_decay 0.0004 --optimizer sam 
 python synthetic_experiments.py --num_objects 4 --encoder_model small7 --weight_decay 0.0004 --optimizer sam 
 
-for i in 0 2 5 10 15 20 25
+
+# MLP Models 
+python synthetic_experiments.py --num_objects 1 --encoder_model mlp_0_0 --weight_decay 0.0004
+
+for i in 2 5 10 15 20 25
 do 
-    python synthetic_experiments.py --num_objects 1 --encoder_model mlp_$i  
+    python synthetic_experiments.py --num_objects 1 --encoder_model mlp_${i}_1 --weight_decay 0.0004
+done 
+
+for i in 5 10 15
+do 
+    python synthetic_experiments.py --num_objects 1 --encoder_model mlp_${i}_2 --weight_decay 0.0004
+done 
+
+for i in 5 10 15
+do 
+    python synthetic_experiments.py --num_objects 1 --encoder_model mlp_${i}_3 --weight_decay 0.0004
 done 

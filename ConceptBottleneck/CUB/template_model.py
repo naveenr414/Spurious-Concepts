@@ -134,32 +134,60 @@ class End2EndModel(torch.nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, num_classes, expand_dim,encoder_model=False):
+    def __init__(self, input_dim, num_classes, expand_dim,encoder_model=False,num_middle_encoder=0):
         super(MLP, self).__init__()
         self.input_image_size = 256
         self.expand_dim = expand_dim
+        self.num_middle_encoder = num_middle_encoder 
 
+        # For Encoder Models, generalize the notion of expander dim 
+        # So there's multiple stacked 
         if encoder_model:
             input_dim = 3*self.input_image_size**2
-
-        if self.expand_dim:
-            self.linear = nn.Linear(input_dim, expand_dim)
             self.activation = torch.nn.ReLU()
-            self.linear2 = nn.Linear(expand_dim, num_classes) #softmax is automatically handled by loss function
+
+            self.linear_layers = []
+
+            if self.num_middle_encoder == 0:
+                self.linear = nn.Linear(input_dim,num_classes)
+                self.linear_layers = [self.linear]
+            elif self.num_middle_encoder == 1:
+                self.linear = nn.Linear(input_dim, expand_dim)
+                self.activation = torch.nn.ReLU()
+                self.linear2 = nn.Linear(expand_dim, num_classes) 
+                self.linear_layers = [self.linear,self.activation,self.linear2]
+            else:
+                self.linear = nn.Linear(input_dim, expand_dim)
+                self.activation = torch.nn.ReLU()
+                self.linear2 = nn.Linear(expand_dim, expand_dim) 
+                self.linear3 = nn.Linear(expand_dim, num_classes) 
+
+                self.linear_layers = [self.linear] 
+                for i in range(self.num_middle_encoder-1):
+                    self.linear_layers += [self.activation,nn.Linear(expand_dim,expand_dim)] 
+                
+                self.linear_layers += [self.activation,self.linear3]
         else: 
-            self.linear = nn.Linear(input_dim, num_classes)
+            if self.expand_dim:
+                self.linear = nn.Linear(input_dim, expand_dim)
+                self.activation = torch.nn.ReLU()
+                self.linear2 = nn.Linear(expand_dim, num_classes) #softmax is automatically handled by loss function
+            else: 
+                self.linear = nn.Linear(input_dim, num_classes)
 
         self.encoder_model = encoder_model
 
     def forward(self, x, binary=False):
-        if self.encoder_model:
+        if hasattr(self,'encoder_model') and self.encoder_model:
             x = x.view(x.shape[0],3*self.input_image_size**2)
-
-        x = self.linear(x)
-        if hasattr(self, 'expand_dim') and self.expand_dim:
-            x = self.activation(x)
-            x = self.linear2(x)
-        if self.encoder_model:
+            for i in self.linear_layers:
+                x = i(x) 
+        else:
+            x = self.linear(x)
+            if hasattr(self, 'expand_dim') and self.expand_dim:
+                x = self.activation(x)
+                x = self.linear2(x)
+        if hasattr(self,'encoder_model') and self.encoder_model:
             x = [x[:,i].reshape((len(x),1)) for i in range(x.shape[1])]
             if self.training:
                 return x, x

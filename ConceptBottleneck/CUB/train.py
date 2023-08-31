@@ -279,14 +279,19 @@ def train(model, args):
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
     logger.write('train data path: %s\n' % train_data_path)
 
+    # TODO: Remove this later
+    print("Experiment name {}".format(args.experiment_name))
+
+    resize = args.encoder_model=='inceptionv3' or 'dsprites' in args.data_dir or 'CUB' in args.data_dir
+
     if args.ckpt: #retraining
         train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize)
         val_loader = None
     else:        
         train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
                                  n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
-        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
+        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name,resize=resize)
     
     best_val_epoch = -1
     best_val_loss = float('inf')
@@ -376,7 +381,8 @@ def train_X_to_C_to_y(args):
     model = ModelXtoCtoY(n_class_attr=args.n_class_attr, pretrained=args.pretrained, freeze=args.freeze,
                          num_classes=args.num_classes, use_aux=args.use_aux, n_attributes=args.n_attributes,
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
-                        use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder)
+                        use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder, 
+                        num_middle_encoder=args.num_middle_encoder)
     train(model, args)
 
 def train_X_to_y(args):
@@ -480,6 +486,8 @@ def parse_arguments(experiment):
                            help='Which encoder model to use, inceptionv3 or small3')
         parser.add_argument('-expand_dim_encoder',type=int,default=0,
                            help='When using an MLP, what should the expand dim of the encoder be')
+        parser.add_argument('-num_middle_encoder',type=int,default=0,
+                           help='When using an MLP, how many dimensions does the middle layer have')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)
