@@ -6,3 +6,4 @@ ConceptBottleneck/runs
 results/
 src.egg-info/
 scripts/.ipynb_checkpoints
+scripts/runs

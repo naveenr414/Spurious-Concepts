@@ -16,6 +16,9 @@
 # %autoreload 2
 
 import os
+import logging 
+logging.basicConfig(level=logging.INFO)
+
 os.chdir('../')
 
 import sys
@@ -82,6 +85,8 @@ results_folder = "results/synthetic/objects={}_noisy={}_wd={}_model={}_optimizer
     num_objects,noisy,weight_decay,encoder_model,optimizer,seed
 )
 
+logging.info("Results folder {}".format(results_folder))
+
 if not os.path.exists(results_folder):
     os.makedirs(results_folder)
 # -
@@ -103,6 +108,7 @@ for i in range(num_images_show):
     image.save("{}/{}.png".format(results_folder,i+1))
 
 # ## Analyze Accuracy
+logging.info("Analyzing Accuracy")
 
 train_acc, val_acc = get_accuracy(joint_model,run_joint_model,train_loader).item(), get_accuracy(joint_model,run_joint_model,val_loader).item()
 
@@ -145,6 +151,8 @@ c = np.round(c,3)
 
 # ### Maximal Activation
 
+logging.info("Maximal Activation")
+
 def numpy_to_pil(img):
     mean = np.array([0.5, 0.5, 0.5])
     std = np.array([2, 2, 2])
@@ -174,94 +182,96 @@ for concept_num in range(num_objects*2):
 
 # ### Patch-Based
 
-grid_size = 3
-concept_num = 0
-grid_width = 256//grid_size
-combinations = list(itertools.product([0, 1], repeat=grid_size**2))
-combinations_grid = [[list(combination[i:i+grid_size]) for i in range(0, grid_size**2, grid_size)] for combination in combinations]
+logging.info("Patch Based")
+
+# grid_size = 3
+# concept_num = 0
+# grid_width = 256//grid_size
+# combinations = list(itertools.product([0, 1], repeat=grid_size**2))
+# combinations_grid = [[list(combination[i:i+grid_size]) for i in range(0, grid_size**2, grid_size)] for combination in combinations]
 
 
-def combo_to_image(combo):
-    default_image = no_color.clone().view(3, 1, 1).expand((3,256,256)).clone()
+# def combo_to_image(combo):
+#     default_image = no_color.clone().view(3, 1, 1).expand((3,256,256)).clone()
     
-    for i in range(grid_size):
-        for j in range(grid_size):
-            if combo[i][j] == 1:
-                color_tensor = full_color.view(3, 1, 1).expand((3, grid_width, grid_width))
-                default_image[:,i*grid_width:(i+1)*grid_width,j*grid_width:
-                              (j+1)*grid_width] = color_tensor
+#     for i in range(grid_size):
+#         for j in range(grid_size):
+#             if combo[i][j] == 1:
+#                 color_tensor = full_color.view(3, 1, 1).expand((3, grid_width, grid_width))
+#                 default_image[:,i*grid_width:(i+1)*grid_width,j*grid_width:
+#                               (j+1)*grid_width] = color_tensor
                 
                 
-    return default_image
+#     return default_image
 
 
-def combination_to_string(combination):
-    return ''.join(str(element) for row in combination for element in row)
+# def combination_to_string(combination):
+#     return ''.join(str(element) for row in combination for element in row)
 
 
-all_images = torch.stack([combo_to_image(i) for i in combinations_grid])
-y,c = run_joint_model(joint_model,all_images)
-c = torch.nn.Sigmoid()(c)
-c = c.T
+# all_images = torch.stack([combo_to_image(i) for i in combinations_grid])
+# y,c = run_joint_model(joint_model,all_images)
+# c = torch.nn.Sigmoid()(c)
+# c = c.T
 
-# +
-combination_to_score = {}
-for i,combination in enumerate(combinations_grid):
-    condensed_string = combination_to_string(combination)
-    combination_to_score[condensed_string] = c.detach().numpy()[i,concept_num]
+# # +
+# combination_to_score = {}
+# for i,combination in enumerate(combinations_grid):
+#     condensed_string = combination_to_string(combination)
+#     combination_to_score[condensed_string] = c.detach().numpy()[i,concept_num]
     
-largest_indices = np.argsort(c.detach().numpy()[:,0])[-25:]
+# largest_indices = np.argsort(c.detach().numpy()[:,0])[-25:]
 
-# +
-max_dif = 0
-max_ind = -1
+# # +
+# max_dif = 0
+# max_ind = -1
 
-for i in largest_indices:
-    combo_original = combinations_grid[i]
-    modified_combo = deepcopy(combo_original)
-    for j in range(grid_size):
-        modified_combo[j][-1] = 0
+# for i in largest_indices:
+#     combo_original = combinations_grid[i]
+#     modified_combo = deepcopy(combo_original)
+#     for j in range(grid_size):
+#         modified_combo[j][-1] = 0
         
-    score_original = combination_to_score[combination_to_string(combo_original)]
-    score_modified = combination_to_score[combination_to_string(modified_combo)]
+#     score_original = combination_to_score[combination_to_string(combo_original)]
+#     score_modified = combination_to_score[combination_to_string(modified_combo)]
 
-    if score_original-score_modified > max_dif:
-        max_dif = score_original-score_modified
-        max_ind = i
-# -
+#     if score_original-score_modified > max_dif:
+#         max_dif = score_original-score_modified
+#         max_ind = i
+# # -
 
-combo_original = combinations_grid[max_ind]
-modified_combo = deepcopy(combo_original)
-for j in range(grid_size):
-    modified_combo[j][-1] = 0
+# combo_original = combinations_grid[max_ind]
+# modified_combo = deepcopy(combo_original)
+# for j in range(grid_size):
+#     modified_combo[j][-1] = 0
 
-im_original = numpy_to_pil(combo_to_image(combo_original).detach().numpy())
-im_final = numpy_to_pil(combo_to_image(modified_combo).detach().numpy())
+# im_original = numpy_to_pil(combo_to_image(combo_original).detach().numpy())
+# im_final = numpy_to_pil(combo_to_image(modified_combo).detach().numpy())
 
-im_original.save("{}/{}.png".format(results_folder,'original_combo'))
-im_final.save("{}/{}.png".format(results_folder,'modified_combo'))
+# im_original.save("{}/{}.png".format(results_folder,'original_combo'))
+# im_final.save("{}/{}.png".format(results_folder,'modified_combo'))
 
 # ### Saliency Maps
 
-if 'mlp' not in encoder_model:
-    for method, method_name in zip(
-        [plot_gradcam,plot_integrated_gradients,plot_saliency],
-        ['gradcam','integrated_gradients','saliency']
-    ):
-        plt.axis('off')
-        ret = method(joint_model,run_joint_model,0,val_images,0,val_pkl)
+# if 'mlp' not in encoder_model:
+#     for method, method_name in zip(
+#         [plot_gradcam,plot_integrated_gradients,plot_saliency],
+#         ['gradcam','integrated_gradients','saliency']
+#     ):
+#         plt.axis('off')
+#         ret = method(joint_model,run_joint_model,0,val_images,0,val_pkl)
 
-        if method_name == 'integrated_gradients':
-            ret[0].savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
-        else:
-            plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+#         if method_name == 'integrated_gradients':
+#             ret[0].savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
+#         else:
+#             plt.savefig('{}/{}.png'.format(results_folder,method_name),bbox_inches='tight')
 
 final_data = {
     'train_accuracy': train_acc, 
     'val_accuracy': val_acc, 
     'concept_accuracy': accuracy_by_concept_train.tolist(), 
     'adversarial_activations': np.array(activation_values).tolist(),  
-    'grid_dif': float(max_dif), 
+    # 'grid_dif': float(max_dif), 
     'num_objects': num_objects, 
     'noisy': noisy,
     'weight_decay': weight_decay,

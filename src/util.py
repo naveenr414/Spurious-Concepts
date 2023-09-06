@@ -329,6 +329,9 @@ def get_data_by_name(dataset_name):
 
     return train_loader, val_loader, train_pkl, val_pkl
 
+def list_to_string(l):
+    return ''.join([str(i) for i in l])
+
 def unroll_data(data_loader):
     """ Take the data in data_loader and turn it into torch Tensors
 
@@ -627,3 +630,14 @@ def hamming_distance(str1, str2,diff_names=[],ret_diff=False):
         return distance
     else:
         return distance, ret_array
+    
+def batch_run(function,list_of_vars,batch_size):
+    results = []
+
+    for k in range(0,len(list_of_vars),batch_size):
+        batch_start = k
+        batch_end = min(k+batch_size,len(list_of_vars))
+
+        results.append(function(list_of_vars[batch_start:batch_end]))
+    
+    return results

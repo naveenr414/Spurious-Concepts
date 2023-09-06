@@ -243,10 +243,10 @@ class SimpleConvNet(nn.Module):
         # The other one, we use a 256x256
         # When we run final experiments, change everything to be 299x299
 
-        if num_classes == 200:
+        if num_classes == 200 or num_classes == 100:
             self.conv_output_size = 256*37*37
         else:
-            self.conv_output_size = 256*37*37
+            self.conv_output_size = 256*32*32
 
         self.all_fc = nn.ModuleList()
         

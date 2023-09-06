@@ -229,11 +229,12 @@ def train(model, args):
         
         imbalance = [1 for i in range(args.n_attributes)]
 
-    if os.path.exists(args.log_dir): # job restarted by cluster
-        for f in os.listdir(args.log_dir):
-            os.remove(os.path.join(args.log_dir, f))
-    else:
+    if not os.path.exists(args.log_dir): # job restarted by cluster
         os.makedirs(args.log_dir)
+    #     for f in os.listdir(args.log_dir):
+    #         os.remove(os.path.join(args.log_dir, f))
+    # else:
+    #     os.makedirs(args.log_dir)
 
     logger = Logger(os.path.join(args.log_dir, 'log.txt'))
     logger.write(str(args) + '\n')
@@ -325,7 +326,9 @@ def train(model, args):
             best_val_epoch = epoch
             best_val_acc = val_acc_meter.avg
             logger.write('New model best model at epoch %d\n' % epoch)
+
             torch.save(model, os.path.join(args.log_dir, 'best_model_%d.pth' % args.seed))
+            
             #if best_val_acc >= 100: #in the case of retraining, stop when the model reaches 100% accuracy on both train + val sets
             #    break
 
