@@ -54,6 +54,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
     """
     For the rest of the networks (X -> A, cotraining, simple finetune)
     """
+
     if is_training:
         model.train()
     else:
@@ -84,7 +85,11 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         
         if is_training and args.use_aux:
             binary = args.train_addition == "binary"
-            outputs, aux_outputs = model(inputs_var,binary=binary)
+
+            if args.encoder_model == 'mlp_mask':
+                outputs, aux_outputs, mask = model(inputs_var,binary=binary)
+            else:
+                outputs, aux_outputs = model(inputs_var,binary=binary)
             losses = []
             out_start = 0
             
@@ -93,11 +98,25 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 losses.append(loss_main)
                 out_start = 1
             if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
-                                
                 for i in range(len(attr_criterion)):
                     losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
                                                             + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
+            if args.encoder_model == 'mlp_mask':
+                zeroes = torch.zeros_like(mask[0])
+                
+                if torch.cuda.is_available():
+                    zeroes = zeroes.cuda()
+
+                for m in mask:
+                    m = m / torch.max(m)
+
+                    # Calculate L1 norms along the grouped dimensions
+                    l1_norm = torch.norm(m, 1)
                     
+                    # Sum L1 norms across groups and take the mean
+                    l1_norm = torch.mean(l1_norm)
+                    losses.append(args.mask_loss_weight * l1_norm)
+
             if args.train_addition == "alternate_loss":
                 print("Running alternate loss")
                 which_loss = epoch%2
@@ -123,7 +142,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 loss_main = criterion(outputs[0], labels_var)
                 losses.append(loss_main)
                 out_start = 1
-            if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+            if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end                
                 for i in range(len(attr_criterion)):
                     losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]))
 
@@ -147,6 +166,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         else: #finetune
             total_loss = sum(losses)
         loss_meter.update(total_loss.item(), inputs.size(0))
+
         if is_training:
             if type(optimizer) == SAM:
                 total_loss.backward()
@@ -195,6 +215,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                         losses.append(loss_main)
                         out_start = 1
                     if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+                       
                         for i in range(len(attr_criterion)):
                             losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]))
 
@@ -279,9 +300,6 @@ def train(model, args):
     train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
     logger.write('train data path: %s\n' % train_data_path)
-
-    # TODO: Remove this later
-    print("Experiment name {}".format(args.experiment_name))
 
     resize = args.encoder_model=='inceptionv3' or 'dsprites' in args.data_dir or 'CUB' in args.data_dir
 
@@ -491,6 +509,8 @@ def parse_arguments(experiment):
                            help='When using an MLP, what should the expand dim of the encoder be')
         parser.add_argument('-num_middle_encoder',type=int,default=0,
                            help='When using an MLP, how many dimensions does the middle layer have')
+        parser.add_argument('-mask_loss_weight',type=float,default=1.0,
+            help='Mask Loss Weight for Encoder MOdels with Mask')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)

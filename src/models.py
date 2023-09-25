@@ -419,6 +419,54 @@ def get_last_filter_activations(model,model_function,x,concept_num):
     
     return activations
 
+def get_independent_encoder(num_objects,encoder_model,noisy,weight_decay,optimizer,seed):
+    """Load a Independent model encoder (concept predictor) for the Sythetic dataset
+    
+    Arguments:
+        num_objects: Which synthetic dataset, such as 1, 2, or 4
+        encoder_model: String, such as 'inceptionv3', 'small3', or 'small7'
+        noisy: Boolean, whether to use the noisy version of the dataset
+        weight_decay: Float, such as 0.004, how much weight_decay the model was trained with
+        optimizer: String, such as 'sgd'
+        
+    Returns: PyTorch model
+    """
+
+    dataset_name = "synthetic_{}".format(num_objects)
+    if noisy:
+        dataset_name += "_noisy"
+
+    log_folder = "results/{}/independent_model_{}/concept".format(dataset_name,encoder_model,seed)
+    independent_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
+    independent_model = torch.load(independent_location,map_location=torch.device('cpu'))
+
+    r = independent_model.eval()
+    return independent_model
+
+def get_independent_decoder(num_objects,encoder_model,noisy,weight_decay,optimizer,seed):
+    """Load a Independent model encoder (concept predictor) for the Sythetic dataset
+    
+    Arguments:
+        num_objects: Which synthetic dataset, such as 1, 2, or 4
+        encoder_model: String, such as 'inceptionv3', 'small3', or 'small7'
+        noisy: Boolean, whether to use the noisy version of the dataset
+        weight_decay: Float, such as 0.004, how much weight_decay the model was trained with
+        optimizer: String, such as 'sgd'
+        
+    Returns: PyTorch model
+    """
+
+    dataset_name = "synthetic_{}".format(num_objects)
+    if noisy:
+        dataset_name += "_noisy"
+
+    log_folder = "results/{}/independent_model_{}/bottleneck".format(dataset_name,encoder_model,seed)
+    independent_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
+    independent_model = torch.load(independent_location,map_location=torch.device('cpu'))
+
+    r = independent_model.eval()
+    return independent_model
+
 def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,seed):
     """Load a Synthetic model for the Sythetic dataset
     

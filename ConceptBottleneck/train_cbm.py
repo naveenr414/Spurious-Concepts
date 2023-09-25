@@ -49,6 +49,8 @@ def get_log_folder(args):
 
     if encoder_model == 'mlp':
         encoder_model += "_{}_{}".format(args.expand_dim_encoder,args.num_middle_encoder)
+    elif encoder_model == 'mlp_mask':
+        encoder_model += "_{}".format(args.mask_loss_weight)
 
     if args.weight_decay == 0.0004 and args.encoder_model == 'inceptionv3':
         log_folder = f"results/{args.dataset}/{args.model_type}"
@@ -87,6 +89,7 @@ def main(args):
     optimizer = args.optimizer
     expand_dim_encoder = args.expand_dim_encoder
     num_middle_encoder = args.num_middle_encoder
+    mask_loss_weight = args.mask_loss_weight
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -97,7 +100,8 @@ def main(args):
             f"python3 experiments.py cub Independent_CtoY --seed {seed} -log_dir {log_folder}/bottleneck "
             f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir ../../cem/cem/{dataset}/preprocessed "
             f"-n_attributes {num_attributes} -no_img -b 64 -weight_decay 0.00005 -lr 0.01 -scheduler_step 100 "
-            f"-num_classes {num_classes} -encoder_model {encoder_model}"
+            f"-num_classes {num_classes} -encoder_model {encoder_model} "
+            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
         )
         cmd2 = (
             f"python3 experiments.py cub Concept_XtoC --seed {seed} -ckpt 1 -log_dir {log_folder}/concept "
@@ -106,8 +110,19 @@ def main(args):
             f"-b 64 -weight_decay 0.00004 -lr 0.01 -encoder_model {encoder_model} -num_classes {num_classes} "
             f"-scheduler_step 100 -bottleneck"
         )
+
         run_command(cmd1)
         run_command(cmd2)
+
+    elif model_type == "independent_encoder":
+        cmd1 = (
+            f"python3 experiments.py cub Independent_CtoY --seed {seed} -log_dir {log_folder}/bottleneck "
+            f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir ../../cem/cem/{dataset}/preprocessed "
+            f"-n_attributes {num_attributes} -no_img -b 64 -weight_decay 0.00005 -lr 0.01 -scheduler_step 100 "
+            f"-num_classes {num_classes} -encoder_model {encoder_model} "
+            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
+        )
+        run_command(cmd1)
 
 
     elif model_type == "sequential":
@@ -141,7 +156,7 @@ def main(args):
             f"-data_dir ../../cem/cem/{dataset}/preprocessed -n_attributes {num_attributes} "
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 64 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid "
-            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder}"
+            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
         )
         
         run_command(cmd)
@@ -170,5 +185,6 @@ if __name__ == "__main__":
     parser.add_argument('--optimizer',type=str,default='sgd',help='Which optimizer to use')
     parser.add_argument('--expand_dim_encoder',type=int,help="Expand Dim for the encoder MLP",default=0)
     parser.add_argument('--num_middle_encoder',type=int,help="Middle Dimension for the encoder MLP",default=0)
+    parser.add_argument('--mask_loss_weight',type=float,default=1.0,help="Strength of mask weight")
     args = parser.parse_args()
     main(args)

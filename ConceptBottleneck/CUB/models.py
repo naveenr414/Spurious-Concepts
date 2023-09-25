@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7, SimpleConvNet9, SimpleConvNet7_SoftPlus
+from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7, SimpleConvNet9, SimpleConvNet7_SoftPlus, MLPWithMask
 
 
 # Independent & Sequential Model
@@ -63,9 +63,8 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
     elif encoder_model == 'mlp':
         # TODO: Make this more general 
         model1 = MLP(299**2*3,n_attributes,expand_dim_encoder,encoder_model=True,num_middle_encoder=num_middle_encoder)
-
-        # TODO: Remove this, for debugging 
-        print(model1)
+    elif encoder_model == 'mlp_mask':
+        model1 = MLPWithMask(299**2*3,n_attributes)
     else:
         raise Exception("{} not found".format(encoder_model))
             
