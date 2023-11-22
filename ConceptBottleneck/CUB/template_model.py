@@ -230,258 +230,75 @@ def inception_v3(pretrained, freeze, **kwargs):
 
     return Inception3(**kwargs)
 
-# class UNetConvBlock(nn.Module):
-#     def __init__(self, in_channels, out_channels):
-#         super(UNetConvBlock, self).__init__()
-#         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-#         self.relu = nn.ReLU(inplace=True)
-#         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-        
-#     def forward(self, x):
-#         x = self.conv1(x)
-#         x = self.relu(x)
-#         x = self.conv2(x)
-#         x = self.relu(x)
-#         return x
+class SimpleConvNetN(nn.Module):
+    def __init__(self, num_classes, num_layers,aux_logits=True, transform_input=False, 
+                 n_attributes=0, bottleneck=False, expand_dim=0, 
+                 three_class=False, connect_CY=False):
+        super(SimpleConvNetN, self).__init__()
+        self.conv_layers = nn.ModuleList()
+        channels = 512
+        for i in range(num_layers):
+            in_channels = 3 if i == 0 else 2**(i+5)
+            out_channels = 2**(i+6) 
+            in_channels = min(in_channels,512)
+            out_channels = min(out_channels,512)
+            conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            self.conv_layers.append(conv_layer)
 
-# class UNet(nn.Module):
-#     def __init__(self, in_channels, out_channels):
-#         super(UNet, self).__init__()
-#         # Contracting Path (Encoder)
-#         self.encoder1 = UNetConvBlock(in_channels, 64)
-#         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
-#         self.encoder2 = UNetConvBlock(64, 128)
-#         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-#         self.encoder3 = UNetConvBlock(128, 256)
-#         self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-#         self.encoder4 = UNetConvBlock(256, 512)
-#         self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
-        
-#         # Bottleneck
-#         self.bottleneck = UNetConvBlock(512, 1024)
-        
-#         # Expansive Path (Decoder)
-#         self.upconv4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
-#         self.decoder4 = UNetConvBlock(1024, 512)
-#         self.upconv3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-#         self.decoder3 = UNetConvBlock(512, 256)
-#         self.upconv2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-#         self.decoder2 = UNetConvBlock(256, 128)
-#         self.upconv1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-#         self.decoder1 = UNetConvBlock(128, 64)
-        
-#         # Output layer
-#         self.outconv = nn.Conv2d(64, out_channels, kernel_size=1)
-        
-#     def forward(self, x):
-#         # Contracting Path (Encoder)
-#         enc1 = self.encoder1(x)
-#         enc2 = self.encoder2(self.pool1(enc1))
-#         enc3 = self.encoder3(self.pool2(enc2))
-#         enc4 = self.encoder4(self.pool3(enc3))
-        
-#         # Bottleneck
-#         bottleneck = self.bottleneck(self.pool4(enc4))
-        
-#         # Expansive Path (Decoder)
-#         dec4 = self.upconv4(bottleneck)
-#         dec4 = torch.cat((enc4, dec4), dim=1)
-#         dec4 = self.decoder4(dec4)
-        
-#         dec3 = self.upconv3(dec4)
-#         dec3 = torch.cat((enc3, dec3), dim=1)
-#         dec3 = self.decoder3(dec3)
-        
-#         dec2 = self.upconv2(dec3)
-#         dec2 = torch.cat((enc2, dec2), dim=1)
-#         dec2 = self.decoder2(dec2)
-        
-#         dec1 = self.upconv1(dec2)
-#         dec1 = torch.cat((enc1, dec1), dim=1)
-#         dec1 = self.decoder1(dec1)
-        
-#         # Output layer
-#         out = self.outconv(dec1)
-#         return out
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.input_size = 256
 
-# class SimpleUNet(nn.Module):
-#     def __init__(self, in_channels, out_channels):
-#         super(SimpleUNet, self).__init__()
+        # Calculate the output size of the last conv layer before the linear layer
+        first_num = min(512,256*2**(num_layers-3))
+        second_num = 32//(2**(num_layers-3))
+        self.conv_output_size = first_num*second_num**2
+
+        self.all_fc = nn.ModuleList()
         
-#         # Contracting Path (Encoder)
-#         self.encoder = nn.Sequential(
-#             nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(32, 64, kernel_size=3, padding=1),
-#             nn.ReLU(inplace=True),
-#             nn.MaxPool2d(kernel_size=2, stride=2)
-#         )
-        
-#         # Bottleneck
-#         self.bottleneck = nn.Sequential(
-#             nn.Conv2d(64, 128, kernel_size=3, padding=1),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(128, 128, kernel_size=3, padding=1),
-#             nn.ReLU(inplace=True)
-#         )
-        
-#         # Expansive Path (Decoder)
-#         self.decoder = nn.Sequential(
-#             nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(64, 64, kernel_size=3, padding=1),
-#             nn.ReLU(inplace=True),
-#             nn.ConvTranspose2d(64, 16, kernel_size=1, stride=1),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(16, out_channels, kernel_size=3, padding=1),
-#             # nn.ReLU(inplace=True),
-#             # nn.Conv2d(32, out_channels, kernel_size=3, padding=1)
-#         )
-        
-#     def forward(self, x):
-#         # Contracting Path (Encoder)
-#         enc = self.encoder(x)
-        
-#         # Bottleneck
-#         bottleneck = self.bottleneck(enc)
-        
-#         # Expansive Path (Decoder)
-#         out = self.decoder(bottleneck)
-        
-#         return out
+        self.aux_logits = aux_logits
+        self.transform_input = transform_input
+        self.n_attributes = n_attributes
+        self.bottleneck = bottleneck
+        if aux_logits:
+            self.AuxLogits = InceptionAux(768, num_classes, n_attributes=self.n_attributes, bottleneck=bottleneck, \
+                                                expand_dim=expand_dim, three_class=three_class, connect_CY=connect_CY)
 
-class UNet(nn.Module):
-    def __init__(self):
-        super(UNet, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
-        )
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
-        )
-        self.decoder = nn.Sequential(
-            nn.Conv2d(96, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2)
-        )
-    def forward(self, x):
-        x1 = self.encoder(x)
-        x2 = self.bottleneck(x1)
-        x3 = self.decoder(torch.cat([x2, x1], dim=1))
-        return x3
-
-class MLPWithMask(nn.Module):
-    def __init__(self, input_dim, num_classes, expand_dim=15,num_middle_encoder=1):
-        super(MLPWithMask, self).__init__()
-        self.input_image_size = 256
-        self.expand_dim = expand_dim
-        self.num_middle_encoder = num_middle_encoder 
-        self.num_classes = num_classes
-
-        # For Encoder Models, generalize the notion of expander dim 
-        # So there's multiple stacked 
-        input_dim = 3*self.input_image_size**2
-        self.activation = torch.nn.ReLU()
-
-        self.linear = nn.Linear(input_dim, expand_dim)
-        self.activation = torch.nn.ReLU()
-        self.linear2 = nn.Linear(expand_dim, num_classes) 
-        self.linear_layers = [self.linear,self.activation,self.linear2]
-
-        self.mask_generator = UNet()
-        if torch.cuda.is_available():
-            # for i in range(len(self.mask_generators)):
-            #     self.mask_generators[i] = self.mask_generators[i].cuda()
-            self.mask_generator = self.mask_generator.cuda()
-
-    def forward(self, x, binary=False):
-        # mask_list = [self.mask_generators[c](x) for c in range(self.num_classes)]
-        mask = self.mask_generator(x)
-        mask = mask.expand(mask.shape[0],3,mask.shape[2], mask.shape[3])  
-        mask = mask.reshape(mask.shape[0],3*self.input_image_size**2)
-
-        x = x.view(x.shape[0],3*self.input_image_size**2)
-
-        outputs = []
-        for c in range(self.num_classes):
-            y = x * mask
-            for i in self.linear_layers:
-                y = i(y)
-            outputs.append(y[:,c].reshape((len(y),1)))
-        x = outputs 
-                
-        if self.training:
-            return x, x, [mask for i in range(self.num_classes)]
+        if connect_CY:
+            self.cy_fc = FC(n_attributes, num_classes, expand_dim)
         else:
-            return x
+            self.cy_fc = None
 
+            
+        if self.n_attributes > 0:
+            if not bottleneck: #multitasking
+                self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+            for i in range(self.n_attributes):
+                self.all_fc.append(FC(self.conv_output_size, 1, expand_dim))
+        else:
+            self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
 
+    def forward(self, x,binary=False):
+        for conv_layer in self.conv_layers:
+            x = self.pool(torch.relu(conv_layer(x)))        
+        self.last_conv_output = x
 
+        # Flatten the tensor before passing it through the fully connected layers
+        x = x.view(-1, self.conv_output_size)
+        self.output_before_fc = x
 
-# class MLPWithMask(nn.Module):
-#     def __init__(self, input_dim, num_classes):
-#         super(MLPWithMask, self).__init__()
-
-#         self.input_image_size = 256
-#         self.num_classes = num_classes 
-
-#         # For Encoder Models, generalize the notion of expander dim 
-#         # So there's multiple stacked 
-#         input_dim = 3*self.input_image_size**2
-#         self.activation = torch.nn.ReLU()
-
-#         self.linear_layers = [nn.Linear(input_dim,1)]
-#         # for i in range(num_classes):
-#         # self.linear_layers.append([nn.Linear(input_dim,15),
-#         #                             torch.nn.ReLU(),
-#         #                             nn.Linear(15,1)])
-
-#         if torch.cuda.is_available():
-#             for i in range(num_classes):
-#                 for j in range(len(self.linear_layers[i])):
-#                     self.linear_layers[i][j] = self.linear_layers[i][j].cuda()
-
-#         # self.mask_generators = []
-#         # for i in range(num_classes):
-#         #     self.mask_generators.append(UNet(3,1))
-#         # if torch.cuda.is_available():
-#         #     for i in range(len(self.mask_generators)):
-#         #         self.mask_generators[i] = self.mask_generators[i].cuda()
-
-#     def forward(self, x, binary=False):
-#         outputs = []
-
-#         # for i in range(self.num_classes):
-#         mask = torch.zeros((x.shape[0],1,x.shape[2],x.shape[3])).cuda()
-#         # mask = self.mask_generators[i](x)
-#         # broadcast_mask = mask.expand(mask.shape[0],3,mask.shape[2], mask.shape[3])  
-        
-#         # x_i = x * broadcast_mask 
-#         x_i = x
-
-#         x_i = x_i.view(x_i.shape[0],3*self.input_image_size**2)
-#         x_i = self.linear_layers(x_i)
-
-#         # x_i = self.linear_layers[0][0](x_i)
-#         # x_i = self.linear_layers[0][1](x_i)
-#         # x_i = self.linear_layers[0][2](x_i)
-#         outputs.append(x_i)
-
-#         x = outputs 
-#         if self.training:
-#             return x, x, mask
-#         else:
-#             return x
-
+        out = []
+        for fc in self.all_fc:
+            out.append(fc(x))
+        if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
+            attr_preds = torch.cat(out[1:], dim=1)
+            if binary:
+                attr_preds = torch.round(attr_preds).float()
+            
+            out[0] += self.cy_fc(attr_preds)
+        if self.training and self.aux_logits:
+            return out, out
+        else:
+            return out
 
 
 class SimpleConvNet(nn.Module):

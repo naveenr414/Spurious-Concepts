@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, CBRNet, SimpleConvNet, SimpleConvNet4, SimpleConvNet5, SimpleConvNet6, SimpleConvNet7, SimpleConvNet9, SimpleConvNet7_SoftPlus, MLPWithMask
+from CUB.template_model import MLP, inception_v3, End2EndModel, SimpleConvNetN
 
 
 # Independent & Sequential Model
@@ -32,39 +32,14 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
         model1 = inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
                               n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                               three_class=(n_class_attr == 3))
-    elif encoder_model == 'small3':
-        model1 = SimpleConvNet(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
-    elif encoder_model == 'small4':
-        model1 = SimpleConvNet4(num_classes=num_classes, aux_logits=use_aux,
-                        n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                        three_class=(n_class_attr == 3))
-    elif encoder_model == 'small5':
-        model1 = SimpleConvNet5(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
-    elif encoder_model == 'small6':
-        model1 = SimpleConvNet6(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
-    elif encoder_model == 'small7':
-        model1 = SimpleConvNet7(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
-    elif encoder_model == 'small7_softplus':
-        model1 = SimpleConvNet7_SoftPlus(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
-    elif encoder_model == 'small9':
-        model1 = SimpleConvNet9(num_classes=num_classes, aux_logits=use_aux,
-                              n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
-                              three_class=(n_class_attr == 3))
+    elif 'small' in encoder_model:
+        num_layers = int(encoder_model[-1])
+        model1 = SimpleConvNetN(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
+                            n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                            three_class=(n_class_attr == 3))
     elif encoder_model == 'mlp':
         # TODO: Make this more general 
         model1 = MLP(299**2*3,n_attributes,expand_dim_encoder,encoder_model=True,num_middle_encoder=num_middle_encoder)
-    elif encoder_model == 'mlp_mask':
-        model1 = MLPWithMask(299**2*3,n_attributes)
     else:
         raise Exception("{} not found".format(encoder_model))
             
