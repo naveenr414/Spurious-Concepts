@@ -53,6 +53,7 @@ class CUBDataset(Dataset):
         img_data = self.data[idx]
         img_path = img_data['img_path']
         img_path = self.path_transform(img_path)
+        
         img = Image.open(img_path).convert('RGB')
         
         class_label = img_data['class_label']
@@ -180,9 +181,7 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
 
 
     if path_transform == None:
-        path_transform = lambda path: "../../cem/cem/"+path
-        if experiment_name == 'CHEXPERT':
-            path_transform = lambda path: "../../chest_dataset/" + path
+        path_transform = lambda path: "../../../datasets/"+path
             
     dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform)
             

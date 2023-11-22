@@ -12,6 +12,7 @@ import torch
 import numpy as np
 from analysis import Logger, AverageMeter, accuracy, binary_accuracy
 from sklearn.metrics import roc_auc_score
+import pickle
 
 from CUB import probe, tti, gen_cub_synthetic, hyperopt
 from CUB.dataset import load_data, find_class_imbalance
@@ -50,7 +51,7 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
             optimizer.step() #optimizer step to update parameters
     return loss_meter, acc_meter
 
-def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_criterion, args, epoch, is_training):
+def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter,criterion, attr_criterion, args, epoch, top_pairs=[],is_training=True):
     """
     For the rest of the networks (X -> A, cotraining, simple finetune)
     """
@@ -59,6 +60,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         model.train()
     else:
         model.eval()
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
     for _, data in enumerate(loader):
         if attr_criterion is None:
@@ -76,10 +79,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
             attr_labels_var = torch.autograd.Variable(attr_labels).float()
             attr_labels_var = attr_labels_var.cuda() if torch.cuda.is_available() else attr_labels_var
             
-        inputs_var = torch.autograd.Variable(inputs)
-        inputs_var = inputs_var.cuda() if torch.cuda.is_available() else inputs_var
-        labels_var = torch.autograd.Variable(labels)
-        labels_var = labels_var.cuda() if torch.cuda.is_available() else labels_var
+        inputs_var = torch.autograd.Variable(inputs).to(device)
+        labels_var = torch.autograd.Variable(labels).to(device)
 
         loss_type = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
         
@@ -117,23 +118,6 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                     l1_norm = torch.mean(l1_norm)
                     losses.append(args.mask_loss_weight * l1_norm)
 
-            if args.train_addition == "alternate_loss":
-                print("Running alternate loss")
-                which_loss = epoch%2
-                if which_loss == 0:
-                    losses = losses[1:]
-                else:
-                    losses = losses[:1]
-            if args.train_addition == "concept_loss":
-                attr_labels_formatted = torch.chunk(attr_labels, chunks=attr_labels.shape[1], dim=1)
-                attr_labels_formatted = [tensor.view(attr_labels.shape[0], 1).float() for tensor in attr_labels_formatted]
-                if torch.cuda.is_available():
-                    attr_labels_formatted = [i.cuda() for i in attr_labels_formatted]
-                
-                outputs = model.forward_stage2(attr_labels_formatted)
-                loss_concept = criterion(outputs[0],labels_var)
-                losses.append(0.5*loss_concept)
-                
         else: #testing or no aux logits
             outputs = model(inputs_var)
             losses = []
@@ -152,12 +136,32 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
                 sigmoid_outputs = sigmoid_outputs[:,:-1]
             acc = binary_accuracy(sigmoid_outputs, attr_labels)
             acc_meter.update(acc.data.cpu().numpy(), inputs.size(0))
+            concept_acc_meter.update(acc.data.cpu().numpy(), inputs.size(0))
         else:
+            concept_predictions = torch.nn.Sigmoid()(torch.stack(outputs[1:])[:,:,0].T)
+            concept_accuracy = binary_accuracy(concept_predictions,attr_labels)
+            concept_acc_meter.update(concept_accuracy.cpu().numpy(),inputs.size(0))
+
             acc = accuracy(outputs[0], labels, topk=(1,)) #only care about class prediction accuracy
             acc_meter.update(acc[0], inputs.size(0))
 
         if attr_criterion is not None:
-            if args.bottleneck:
+            if args.train_variation == "loss":
+                SCALE_FACTOR = 1.5
+                for (i,j) in top_pairs:
+                    matching_data_0 = (attr_labels[:,i] == 1) & (attr_labels[:,j] == 0)
+                    matching_data_1 = (attr_labels[:,i] == 0) & (attr_labels[:,j] == 1)
+                    m_0 = torch.sum(matching_data_0)/len(matching_data_0)
+                    m_1 = torch.sum(matching_data_1)/len(matching_data_1)
+
+                    losses[i] *= (1-m_0 + m_0*SCALE_FACTOR)
+                    losses[j] *= (1-m_1 + m_1*SCALE_FACTOR)
+
+            if args.train_variation == "half" and epoch < args.epochs/2:
+                total_loss = sum(losses[1:])
+                if args.normalize_loss:
+                    total_loss /= (args.attr_loss_weight*args.n_attributes)
+            elif args.bottleneck:
                 total_loss = sum(losses)/ args.n_attributes
             else: #cotraining, loss by class prediction and loss by attribute prediction have the same weight
                 total_loss = losses[0] + sum(losses[1:])
@@ -168,78 +172,14 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, criterion, attr_c
         loss_meter.update(total_loss.item(), inputs.size(0))
 
         if is_training:
-            if type(optimizer) == SAM:
-                total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.first_step(zero_grad=True)
-                
-                # TODO: Clean this code up 
-                if is_training and args.use_aux:
-                    binary = args.train_addition == "binary"
-                    outputs, aux_outputs = model(inputs_var,binary=binary)
-                    losses = []
-                    out_start = 0
-                    
-                    if not args.bottleneck: #loss main is for the main task label (always the first output)
-                        loss_main = 1.0 * criterion(outputs[0], labels_var) + 0.4 * criterion(aux_outputs[0], labels_var)
-                        losses.append(loss_main)
-                        out_start = 1
-                    if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
-                        for i in range(len(attr_criterion)):
-                            losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
-                                                                    + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
-                            
-                    if args.train_addition == "alternate_loss":
-                        print("Running alternate loss")
-                        which_loss = epoch%2
-                        if which_loss == 0:
-                            losses = losses[1:]
-                        else:
-                            losses = losses[:1]
-                    if args.train_addition == "concept_loss":
-                        attr_labels_formatted = torch.chunk(attr_labels, chunks=attr_labels.shape[1], dim=1)
-                        attr_labels_formatted = [tensor.view(attr_labels.shape[0], 1).float() for tensor in attr_labels_formatted]
-                        if torch.cuda.is_available():
-                            attr_labels_formatted = [i.cuda() for i in attr_labels_formatted]
-                        
-                        outputs = model.forward_stage2(attr_labels_formatted)
-                        loss_concept = criterion(outputs[0],labels_var)
-                        losses.append(0.5*loss_concept)
-                    
-                else: #testing or no aux logits
-                    outputs = model(inputs_var)
-                    losses = []
-                    out_start = 0
-                    if not args.bottleneck:
-                        loss_main = criterion(outputs[0], labels_var)
-                        losses.append(loss_main)
-                        out_start = 1
-                    if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
-                       
-                        for i in range(len(attr_criterion)):
-                            losses.append(args.attr_loss_weight * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]))
+            optimizer.zero_grad()
+            total_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+    return loss_meter, acc_meter, concept_acc_meter 
 
 
-                if attr_criterion is not None:
-                    if args.bottleneck:
-                        total_loss = sum(losses)/ args.n_attributes
-                    else: #cotraining, loss by class prediction and loss by attribute prediction have the same weight
-                        total_loss = losses[0] + sum(losses[1:])
-                        if args.normalize_loss:
-                            total_loss = total_loss / (1 + args.attr_loss_weight * args.n_attributes)
-                else: #finetune
-                    total_loss = sum(losses)
-
-                total_loss.backward() 
-                optimizer.second_step(zero_grad=True)
-            else:
-                optimizer.zero_grad()
-                total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
-    return loss_meter, acc_meter
-
-def train(model, args):    
+def train(model, args): 
     imbalance = None
     if args.use_attr and not args.no_img and args.weighted_loss:
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
@@ -249,6 +189,30 @@ def train(model, args):
             imbalance = find_class_imbalance(train_data_path, False)"""
         
         imbalance = [1 for i in range(args.n_attributes)]
+
+    top_pairs = []
+
+    if args.train_variation == 'loss':
+        train_data = pickle.load(open(train_data_path,"rb"))
+        FRACTION_PAIRS = 0.25
+        num_pairs = round(len(train_data[0]['attribute_label'])**2*FRACTION_PAIRS)
+        co_occurences = np.zeros((len(train_data[0]['attribute_label']),
+                                    len(train_data[0]['attribute_label'])))
+
+        for i in train_data: 
+            co_occurences += np.array([i['attribute_label']]).dot(np.array([i['attribute_label']]).T)
+        
+        for i in range(co_occurences.shape[0]):
+            for j in range(i,co_occurences.shape[0]):
+                co_occurences[i][j] = 0
+
+        def top_k_indices(arr, k):
+            """Find the top K highest pairs in array"""
+            indices = np.argpartition(arr.flatten(), -k)[-k:]
+            indices = np.unravel_index(indices, arr.shape)
+            return list(zip(indices[0], indices[1]))
+
+        top_pairs = top_k_indices(co_occurences,num_pairs)
 
     if not os.path.exists(args.log_dir): # job restarted by cluster
         os.makedirs(args.log_dir)
@@ -273,11 +237,7 @@ def train(model, args):
                 weight = torch.FloatTensor([ratio])
                 if torch.cuda.is_available():
                     weight = weight.cuda()
-                if args.train_addition == 'mse':
-                    print("Using mse loss")
-                    attr_criterion.append(torch.nn.MSELoss())
-                else:
-                    attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=weight))
+                attr_criterion.append(torch.nn.BCEWithLogitsLoss(weight=weight))
         else:
             for i in range(args.n_attributes):
                 attr_criterion.append(torch.nn.CrossEntropyLoss())
@@ -316,29 +276,47 @@ def train(model, args):
     best_val_loss = float('inf')
     best_val_acc = 0
 
+    if args.train_variation == "half":
+        for param in model.sec_model.parameters():
+            param.requires_grad = False
+
     for epoch in range(0, args.epochs):
         print("On epoch {}".format(epoch))
         train_loss_meter = AverageMeter()
         train_acc_meter = AverageMeter()
+        train_concept_acc_meter = AverageMeter()
 
+        if args.train_variation == "half" and epoch == args.epochs//2:
+            scale_lr = 5 
+            for param in model.sec_model.parameters():
+                param.requires_grad = True
+
+            new_lr = scheduler.get_lr()/scale_lr 
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = new_lr
+
+        
         if args.no_img:
-            train_loss_meter, train_acc_meter = run_epoch_simple(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, args, is_training=True)
+            train_loss_meter, train_acc_meter = run_epoch_simple(model, optimizer, train_loader, train_loss_meter, train_acc_meter,criterion, args, is_training=True)
         else:
-            train_loss_meter, train_acc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter, criterion, attr_criterion, args, epoch, is_training=True)
- 
+            train_loss_meter, train_acc_meter, train_concept_acc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter,  train_concept_acc_meter, criterion, attr_criterion, args, epoch, top_pairs=top_pairs,is_training=True)
+
+            
         if not args.ckpt: # evaluate on val set
             val_loss_meter = AverageMeter()
             val_acc_meter = AverageMeter()
+            val_concept_acc_meter = AverageMeter()
         
             with torch.no_grad():
                 if args.no_img:
                     val_loss_meter, val_acc_meter = run_epoch_simple(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, args, is_training=False)
                 else:
-                    val_loss_meter, val_acc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, attr_criterion, args, epoch, is_training=False)
+                    val_loss_meter, val_acc_meter, val_concept_acc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, val_concept_acc_meter, criterion, attr_criterion, args, epoch, is_training=False)
 
         else: #retraining
             val_loss_meter = train_loss_meter
             val_acc_meter = train_acc_meter
+            val_concept_acc_meter = train_concept_acc_meter
 
         if best_val_acc < val_acc_meter.avg: 
             best_val_epoch = epoch
@@ -353,10 +331,10 @@ def train(model, args):
         train_loss_avg = train_loss_meter.avg
         val_loss_avg = val_loss_meter.avg
                 
-        logger.write('Epoch [%d]:\tTrain loss: %.4f\tTrain accuracy: %.4f\t'
-                'Val loss: %.4f\tVal acc: %.4f\t'
+        logger.write('Epoch [%d]:\tTrain loss: %.4f\tTrain accuracy: %.4f\tTrain concept accuracy: %.4f\t'
+                'Val loss: %.4f\tVal acc: %.4f\tVal concept acc: %.4f\t'
                 'Best val epoch: %d\n'
-                % (epoch, train_loss_avg, train_acc_meter.avg, val_loss_avg, val_acc_meter.avg, best_val_epoch)) 
+                % (epoch, train_loss_avg, train_acc_meter.avg, train_concept_acc_meter.avg, val_loss_avg, val_acc_meter.avg, val_concept_acc_meter.avg, best_val_epoch)) 
         logger.flush()
         
         if epoch <= stop_epoch:
@@ -404,6 +382,13 @@ def train_X_to_C_to_y(args):
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
                         use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder, 
                         num_middle_encoder=args.num_middle_encoder)
+    # Load the model 
+
+    if args.load_model != 'none':
+        model = torch.load(open("../results/models/{}.pt".format(args.load_model),"rb"))
+
+    # model.load_state_dict(weights)
+
     train(model, args)
 
 def train_X_to_y(args):
@@ -510,7 +495,11 @@ def parse_arguments(experiment):
         parser.add_argument('-num_middle_encoder',type=int,default=0,
                            help='When using an MLP, how many dimensions does the middle layer have')
         parser.add_argument('-mask_loss_weight',type=float,default=1.0,
-            help='Mask Loss Weight for Encoder MOdels with Mask')
+            help='Mask Loss Weight for Encoder Models with Mask')
+        parser.add_argument('-load_model',type=str,default='none',
+            help='Name of the pre-trained model to load; if applicable')
+        parser.add_argument('-train_variation',type=str,default='none',
+            help='Run the "half" training variation or the "loss" modification')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)

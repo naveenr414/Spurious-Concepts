@@ -2,6 +2,12 @@
 import argparse
 import os
 import subprocess
+import secrets
+import glob 
+import json 
+import shutil
+
+dataset_folder = "../../../datasets"
 
 def run_command(command):
     """Run some command, print it's output, and any errors it produces
@@ -35,6 +41,33 @@ def run_command(command):
 
     return return_code
 
+def delete_same_dict(save_data):
+    """Delete any data + model that's running the exact same experiment, 
+        so we can replace
+        
+    Arguments:
+        save_data: Dictionary, with information such as seed on the experiment
+        
+    Returns: Nothing
+    
+    Side Effects: Deletes any model + data with the same seed, etc. parameters"""
+
+    all_dicts = glob.glob("../models/model_data/*.json")
+    files_to_delete = []
+
+    for file_name in all_dicts:
+        json_file = json.load(open(file_name))
+
+        if json_file == save_data:
+            files_to_delete.append(file_name.split("/").replace(".json",""))
+
+    # TODO: For debugging 
+    print("Files to delete are {}".format(files_to_delete))
+    
+    for file_name in files_to_delete:
+        os.remove("../models/model_data/{}.json".format(file_name))
+        shutil.rmtree("../models/{}/{}".format(args.dataset,file_name))
+
 
 def get_log_folder(args):
     """Determine the name of the folder where to store the model
@@ -45,24 +78,18 @@ def get_log_folder(args):
     Returns: String containing the name of the folder
     """
 
-    encoder_model = args.encoder_model
+    rand_name = secrets.token_hex(4)
+    save_data = vars(args)
 
-    if encoder_model == 'mlp':
-        encoder_model += "_{}_{}".format(args.expand_dim_encoder,args.num_middle_encoder)
-    elif encoder_model == 'mlp_mask':
-        encoder_model += "_{}".format(args.mask_loss_weight)
+    if args.debugging:
+        rand_name = 'debugging'
 
-    if args.weight_decay == 0.0004 and args.encoder_model == 'inceptionv3':
-        log_folder = f"results/{args.dataset}/{args.model_type}"
-    elif args.encoder_model == 'inceptionv3':
-        log_folder = f"results/{args.dataset}/{args.model_type}_wd_{args.weight_decay}"
-    elif args.weight_decay == 0.0004:
-        log_folder = f"results/{args.dataset}/{args.model_type}_model_{encoder_model}"
-    else:
-        log_folder = f"results/{args.dataset}/{args.model_type}_model_{encoder_model}_wd_{args.weight_decay}"
+    log_folder = "../models/{}/{}".format(args.dataset,rand_name)
     
-    if args.optimizer != 'sgd':
-        log_folder += "_opt_{}".format(args.optimizer)
+    if not args.debugging: 
+        delete_same_dict(save_data)
+
+    json.dump(save_data,open("../models/model_data/{}.json".format(rand_name),"w"))
 
     return log_folder
         
@@ -90,6 +117,8 @@ def main(args):
     expand_dim_encoder = args.expand_dim_encoder
     num_middle_encoder = args.num_middle_encoder
     mask_loss_weight = args.mask_loss_weight
+    load_model = args.load_model
+    train_variation = args.train_variation
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -98,7 +127,7 @@ def main(args):
     if model_type == "independent":
         cmd1 = (
             f"python3 experiments.py cub Independent_CtoY --seed {seed} -log_dir {log_folder}/bottleneck "
-            f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir ../../cem/cem/{dataset}/preprocessed "
+            f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir {dataset_folder}/{dataset}/preprocessed "
             f"-n_attributes {num_attributes} -no_img -b 64 -weight_decay 0.00005 -lr 0.01 -scheduler_step 100 "
             f"-num_classes {num_classes} -encoder_model {encoder_model} "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
@@ -106,18 +135,18 @@ def main(args):
         cmd2 = (
             f"python3 experiments.py cub Concept_XtoC --seed {seed} -ckpt 1 -log_dir {log_folder}/concept "
             f"-e {epochs} -optimizer {optimizer} -pretrained -use_aux -use_attr -weighted_loss multiple "
-            f"-data_dir ../../cem/cem/{dataset}/preprocessed -n_attributes {num_attributes} -normalize_loss "
+            f"-data_dir {dataset_folder}/{dataset}/preprocessed -n_attributes {num_attributes} -normalize_loss "
             f"-b 64 -weight_decay 0.00004 -lr 0.01 -encoder_model {encoder_model} -num_classes {num_classes} "
             f"-scheduler_step 100 -bottleneck"
         )
-
-        run_command(cmd1)
+        
         run_command(cmd2)
+        run_command(cmd1)
 
     elif model_type == "independent_encoder":
         cmd1 = (
             f"python3 experiments.py cub Independent_CtoY --seed {seed} -log_dir {log_folder}/bottleneck "
-            f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir ../../cem/cem/{dataset}/preprocessed "
+            f"-e {epochs} -use_attr -optimizer {optimizer} -data_dir {dataset_folder}/{dataset}/preprocessed "
             f"-n_attributes {num_attributes} -no_img -b 64 -weight_decay 0.00005 -lr 0.01 -scheduler_step 100 "
             f"-num_classes {num_classes} -encoder_model {encoder_model} "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
@@ -129,14 +158,14 @@ def main(args):
         cmd1 = (
             f"python3 experiments.py cub Concept_XtoC --seed {seed} -ckpt 1 -log_dir {log_folder}/concept "
             f"-e {epochs} -optimizer {optimizer} -pretrained -use_aux -use_attr -weighted_loss multiple "
-            f"-encoder_type {encoder_model} -data_dir ../../cem/cem/{dataset}/preprocessed "
+            f"-encoder_type {encoder_model} -data_dir {dataset_folder}/{dataset}/preprocessed "
             f"-n_attributes {num_attributes} -normalize_loss -b 64 -weight_decay 0.00004 -lr 0.01 "
             f"-scheduler_step 100 -encoder_model {encoder_model} -num_classes {num_classes} -bottleneck"
         )
         cmd2 = (
             f"python3 CUB/generate_new_data.py ExtractConcepts "
             f"--model_path results/{dataset}/sequential/concept/best_model_42.pth "
-            f"--data_dir ../../cem/cem/{dataset}/preprocessed -num_classes {num_classes} "
+            f"--data_dir {dataset_folder}/{dataset}/preprocessed -num_classes {num_classes} "
             f"--out_dir results/{dataset}/sequential/output/"
         )
         cmd3 = (
@@ -153,20 +182,15 @@ def main(args):
         cmd = (
             f"python3 experiments.py cub Joint --seed {seed} -ckpt 1 -log_dir {log_folder}/{model_type} "
             f"-e {epochs} -optimizer {optimizer} -pretrained -use_aux -weighted_loss multiple -use_attr "
-            f"-data_dir ../../cem/cem/{dataset}/preprocessed -n_attributes {num_attributes} "
+            f"-data_dir {dataset_folder}/{dataset}/preprocessed -n_attributes {num_attributes} "
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 64 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid "
-            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight}"
+            f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
+            f"-load_model {load_model} -train_variation {train_variation}"
         )
         
         run_command(cmd)
-                
-#         try:
-#             subprocess.check_output([cmd], shell=True,stderr=subprocess.STDOUT)
-#         except subprocess.CalledProcessError as e:
-#             print(str(e.output).replace("\\n","\n"))
-#             raise RuntimeError("command '{}' return with error (code {})".format(e.cmd, e.returncode))
-
+            
     else:
         print(f"Model type {model_type} not found")
 
@@ -186,5 +210,9 @@ if __name__ == "__main__":
     parser.add_argument('--expand_dim_encoder',type=int,help="Expand Dim for the encoder MLP",default=0)
     parser.add_argument('--num_middle_encoder',type=int,help="Middle Dimension for the encoder MLP",default=0)
     parser.add_argument('--mask_loss_weight',type=float,default=1.0,help="Strength of mask weight")
+    parser.add_argument('--load_model',type=str,default='none',help="Load in a pretrained model")
+    parser.add_argument('--train_variation',type=str,default='none',help='Run the "half" training variation or the "loss" modification')
+    parser.add_argument('--debugging', action='store_true')
+
     args = parser.parse_args()
     main(args)
