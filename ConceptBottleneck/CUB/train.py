@@ -62,6 +62,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
         model.eval()
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
         
     for _, data in enumerate(loader):
         if attr_criterion is None:

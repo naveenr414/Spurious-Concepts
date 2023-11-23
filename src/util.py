@@ -13,6 +13,10 @@ import os
 from ConceptBottleneck.CUB.dataset import load_data
 from scipy.stats import wasserstein_distance
 from copy import deepcopy 
+import glob 
+import json 
+
+dataset_directory = "../../../../datasets"
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split
@@ -32,7 +36,7 @@ def new_metadata(dataset,split,unknown=False):
     
         
     
-    preprocessed_train = pickle.load(open("../cem/cem/CUB/preprocessed/{}.pkl".format(split),"rb"))
+    preprocessed_train = pickle.load(open(dataset_directory+"/CUB/preprocessed/{}.pkl".format(split),"rb"))
     preprocessed_train = [i for i in preprocessed_train if i['class_label'] <= 11]
     for i in preprocessed_train:
         i['img_path'] = i['img_path'].replace("CUB/","{}/".format(dataset))
@@ -63,9 +67,9 @@ def new_metadata(dataset,split,unknown=False):
             else:
                 i['attribute_label'].append(0)
 
-    file_location = "../cem/cem/{}/preprocessed/{}.pkl".format(dataset,split)
+    file_location = dataset_directory+"/{}/preprocessed/{}.pkl".format(dataset,split)
     if unknown:
-        file_location = "../cem/cem/{}/preprocessed_unknown/{}.pkl".format(dataset,split)
+        file_location = dataset_directory+"/{}/preprocessed_unknown/{}.pkl".format(dataset,split)
 
             
     pickle.dump(preprocessed_train,open(file_location,"wb"))
@@ -193,7 +197,7 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list, plot=Tru
     heatmap /= np.max(heatmap)
 
         
-    img = cv2.imread("../cem/cem/"+pkl_list[input_num]['img_path'])
+    img = cv2.imread(dataset_directory+"/"+pkl_list[input_num]['img_path'])
     heatmap_cv2 = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
     heatmap_cv2 = np.uint8(255 * heatmap_cv2)
 
@@ -259,12 +263,11 @@ def add_gaussian_noise(image, std_dev=25):
 
     return noisy_image
 
-def get_data(num_objects,noisy,encoder_model="small3"):
+def get_data(num_objects,encoder_model="small3"):
     """Load the Synthetic Dataset for a given number of objects
 
     Arguments:
         num_objects: Number of objects in the synthetic dataset (such as 1, 2, 4)
-        noisy: Boolean, whether to load the noisy version of the dataset
 
     Returns:   
         train_loader, val_loader (PyTorch Data Loaders) and train_pkl, val_pkl (list of dictionaries)
@@ -280,22 +283,23 @@ def get_data(num_objects,noisy,encoder_model="small3"):
     resampling = False
     resize = "inceptionv3" in encoder_model
 
-    dataset_name = "synthetic_{}".format(num_objects)
-    if noisy:
-        dataset_name += "_noisy"
+    dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
 
-    data_dir = "../cem/cem/{}/preprocessed/".format(dataset_name)
+    data_dir = "{}/{}/preprocessed/".format(dataset_directory,dataset_name)
 
     train_data_path = os.path.join(data_dir, 'train.pkl')
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
+    test_data_path = train_data_path.replace('train.pkl', 'test.pkl')
     train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
-                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=resize)
-    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=resize)
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: dataset_directory+"/"+path, is_training=False,resize=resize)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize)
+    test_loader = load_data([test_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize)
 
     train_pkl = pickle.load(open(train_data_path,"rb"))
     val_pkl = pickle.load(open(val_data_path,"rb"))
+    test_pkl = pickle.load(open(test_data_path,"rb"))
 
-    return train_loader, val_loader, train_pkl, val_pkl
+    return train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl
 
 def get_data_by_name(dataset_name):
     """Load a dataset by name
@@ -316,13 +320,13 @@ def get_data_by_name(dataset_name):
     num_class_attr = 2
     resampling = False
 
-    data_dir = "../cem/cem/{}/preprocessed/".format(dataset_name)
+    data_dir = dataset_directory+"/{}/preprocessed/".format(dataset_name)
 
     train_data_path = os.path.join(data_dir, 'train.pkl')
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
     train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
-                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: "../cem/cem/"+path, is_training=False,resize=True)
-    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: "../cem/cem/"+path,resize=True)
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: dataset_directory+"/"+path, is_training=False,resize=True)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=True)
 
     train_pkl = pickle.load(open(train_data_path,"rb"))
     val_pkl = pickle.load(open(val_data_path,"rb"))
@@ -355,9 +359,9 @@ def unroll_data(data_loader):
     val_y = torch.cat(val_y,dim=0)
     val_c = torch.cat(val_c,dim=0)
 
-    return val_images, val_y, val_c
+    return val_images.detach().cpu(), val_y.detach().cpu(), val_c.detach().cpu()
 
-def get_log_folder(dataset,weight_decay,encoder_model,optimizer):
+def get_log_folder(dataset_name,parameters):
     """Get the path to the log folder based on arguments
     
     Arguments:
@@ -371,20 +375,20 @@ def get_log_folder(dataset,weight_decay,encoder_model,optimizer):
         
     """
 
-    if weight_decay == 0.0004 and encoder_model == 'inceptionv3':
-        log_folder = f"results/{dataset}/joint"
-    elif weight_decay == 0.0004:
-        log_folder = f"results/{dataset}/joint_model_{encoder_model}"
-    elif encoder_model == 'inceptionv3':
-        log_folder = f"results/{dataset}/joint_wd_{weight_decay}"
-    else:
-        log_folder = f"results/{dataset}/joint_model_{encoder_model}_wd_{weight_decay}"
-    if optimizer != 'sgd':
-        log_folder += "_opt_{}".format(optimizer)
+    all_model_data = glob.glob("../../models/model_data/*.json")
+    file_matches = []
+    for file_name in all_model_data:
+        real_name = file_name.split("/")[-1].replace(".json","")
+        json_data = json.load(open(file_name))
+
+        for key in parameters:
+            if json_data[key] != parameters[key]:
+                break 
+        else:
+            file_matches.append(real_name) 
+    assert len(file_matches) == 1
     
-    log_folder += '/joint'
-    
-    return log_folder
+    return "{}/{}".format(dataset_name,file_matches[0])
 
 def get_patches(input_array,k):
     """Given a numpy array of size n x n, sum over patches of size k
@@ -501,7 +505,7 @@ def get_part_location(data_point, attribute_num, locations_by_image, val_pkl):
     Returns: Tuple with the new (x,y) for that particular attribute
     """
 
-    width, height = get_image_dimensions('../cem/cem/{}'.format(val_pkl[data_point]['img_path']))
+    width, height = get_image_dimensions(dataset_directory+"/"+ val_pkl[data_point]['img_path'])
     x,y = locations_by_image[val_pkl[data_point]['id']][attribute_num] 
     new_point = convert_point(x,y,width,height)
 

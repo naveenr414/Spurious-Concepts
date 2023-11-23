@@ -2,11 +2,9 @@ from src.images import *
 from src.util import get_log_folder
 import torch
 from torchvision import transforms
-from cem.models.cem import ConceptEmbeddingModel
 import joblib
-from cem.data.CUB200.cub_loader import find_class_imbalance
-from experiments import intervention_utils
 from src.dataset import get_sidelength, get_offsets
+from copy import deepcopy
 
 def logits_to_index(logits):
     """Convert logits from a models outputs to predicted classes
@@ -31,8 +29,8 @@ def run_joint_model(model,x):
     """
     
     output = model.forward(x)
-    y_pred = output[0]
-    c_pred = torch.stack(output[1:]).squeeze(-1)
+    y_pred = output[0].cpu()
+    c_pred = torch.stack(output[1:]).squeeze(-1).cpu()
     
     return y_pred, c_pred
 
@@ -113,10 +111,11 @@ def get_accuracy(model,model_function,dataset):
     
     total_datapoints = 0
     correct_datapoints = 0 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     for data in dataset:
         x,y,c = data
-        y_pred = logits_to_index(model_function(model,x)[0])
+        y_pred = logits_to_index(model_function(model,x.to(device))[0])
         
         total_datapoints += len(y)
         correct_datapoints += sum(y_pred == y)
@@ -137,9 +136,12 @@ def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
     total_datapoints = 0
     zero_one_loss = None
     
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     for data in dataset:
         x,y,c = data
-        c_pred = model_function(model,x)[1].T
+
+        c_pred = model_function(model,x.to(device))[1].T
         
         if sigmoid:
             c_pred = torch.nn.Sigmoid()(c_pred)
@@ -336,8 +338,11 @@ def get_valid_image_function(concept_num,total_concepts,epsilon=0):
     x_end = min(x_end,256)
     y_end = min(y_end,256)
 
-    def valid_image_by_concept(image):
-        image[:,y_start:y_end,x_start:x_end] = 0.25 
+    def valid_image_by_concept(image,original_image=None):
+        if original_image != None:
+            image[:,y_start:y_end,x_start:x_end] = original_image[:,y_start:y_end,x_start:x_end]
+        else: 
+            image[:,y_start:y_end,x_start:x_end] = 0.25 
 
         return image
     
@@ -369,7 +374,7 @@ def valid_right_image(image):
     image[:,:,128:] = 0.25
     return image
 
-def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0,image_size=256):
+def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: x,lamb=0,image_size=256,fixed_image=None,current_concept_val=-1):
     """Given a model and a concept number, find a maximally activating image
     
     Arguments:
@@ -383,20 +388,40 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     """
     
     # Set up the optimization process
-    input_image = torch.randn((1, 3, image_size,image_size), requires_grad=True)
+
+    has_input = fixed_image != None
+
+    if fixed_image == None:
+        input_image = torch.randn((1, 3, image_size,image_size), requires_grad=True)
+    else:
+        input_image = fixed_image[:,:,:,:]
+        input_image.requires_grad = True
+    original_image = deepcopy(fixed_image) 
     optimizer = torch.optim.Adam([input_image], lr=0.01)
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     num_steps = 300
-    for step in range(num_steps):
+    for _ in range(num_steps):
         optimizer.zero_grad()
-        y_pred,c_pred = model_function(model,input_image)
-        loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
+        _,c_pred = model_function(model,input_image.to(device))
+        _ = _.cpu()
+        c_pred = c_pred.cpu()
+        if current_concept_val == 0:
+            loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
+        else:
+            loss = c_pred.T[0,concept_num]
+
         loss += lamb * torch.norm(input_image)
         loss.backward()
         optimizer.step()
-                        
+
         with torch.no_grad():
-            input_image[0] = fix_image(input_image[0])
+
+            if has_input: 
+                input_image[0] = fix_image(input_image[0],original_image=original_image[0])
+            else: 
+                input_image[0] = fix_image(input_image[0],original_image=None)
             
     return input_image
 
@@ -467,7 +492,7 @@ def get_independent_decoder(num_objects,encoder_model,noisy,weight_decay,optimiz
     r = independent_model.eval()
     return independent_model
 
-def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,seed):
+def get_synthetic_model(dataset_name,parameters):
     """Load a Synthetic model for the Sythetic dataset
     
     Arguments:
@@ -480,21 +505,17 @@ def get_synthetic_model(num_objects,encoder_model,noisy,weight_decay,optimizer,s
     Returns: PyTorch model
     """
 
-    dataset_name = "synthetic_{}".format(num_objects)
-    if noisy:
-        dataset_name += "_noisy"
+    log_folder = get_log_folder(dataset_name,parameters)
+    joint_location = "../../models/{}/joint/best_model_{}.pth".format(log_folder,parameters['seed'])
+    joint_model = torch.load(joint_location,map_location='cpu')
 
-    log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
-    joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
-    joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
-
-    if 'mlp' in encoder_model:
+    if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:
         joint_model.encoder_model = True
 
     r = joint_model.eval()
     return joint_model
 
-def get_model_by_name(dataset_name,encoder_model,weight_decay,optimizer,seed):
+def get_model_by_name(dataset_name,parameters):
     """Load a Model by Name, for CUB
     
     Arguments:
@@ -506,8 +527,8 @@ def get_model_by_name(dataset_name,encoder_model,weight_decay,optimizer,seed):
     Returns: PyTorch model
     """
 
-    log_folder = get_log_folder(dataset_name,weight_decay,encoder_model,optimizer)
-    joint_location = "ConceptBottleneck/{}/best_model_{}.pth".format(log_folder,seed)
+    log_folder = get_log_folder(dataset_name,parameters)
+    joint_location = "ConceptBottleneck/{}/joint/best_model_{}.pth".format(log_folder,parameters['seed'])
     joint_model = torch.load(joint_location,map_location=torch.device('cpu'))
     r = joint_model.eval()
     return joint_model

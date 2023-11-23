@@ -8,3 +8,4 @@ src.egg-info/
 scripts/.ipynb_checkpoints
 scripts/runs
 models/
+src/__pycache__/

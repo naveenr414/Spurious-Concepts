@@ -242,23 +242,6 @@ def create_small_dataset():
             output_loc = image.replace("CUB/images","CUB_small/images")        
             add_noise(image,output_loc)
     
-def create_blur_dataset():
-    """Create the CUB blur dataset by going through every image in CUB small
-    Then running the blur function over it to produce an output image"""
-    
-    all_small_images = glob.glob("../cem/cem/CUB_small/images/CUB_200_2011/images/*/*.jpg")
-    
-    for image in all_small_images:
-        output_loc = image.replace("CUB_small","CUB_blur")
-        
-        if "001.Black_footed_Albatross" not in image:
-            copy_image(image,output_loc)
-        else:
-            add_blur(image,output_loc)
-
-    for split in ["train","val","test"]:
-        new_metadata("CUB_blur",split)
-                
 def create_tag_dataset():
     """Create the CUB tag dataset by going through every image in CUB small
     Then running the tag function over it to produce an output image"""

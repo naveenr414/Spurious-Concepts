@@ -180,6 +180,18 @@ class MLP(nn.Module):
                 self.linear = nn.Linear(input_dim, num_classes)
 
         self.encoder_model = encoder_model
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        self.linear = self.linear.to(device)
+        if hasattr(self,'linear2'):
+            self.linear2 = self.linear2.to(device)
+        if hasattr(self,'linear3'):
+            self.linear3 = self.linear3.to(device)
+        if hasattr(self,'activation'):
+            self.activation = self.activation.to(device) 
+        if hasattr(self,'linear_layers'):
+            for i in range(len(self.linear_layers)):
+                self.linear_layers[i] = self.linear_layers[i].to(device)
 
     def forward(self, x, binary=False):
         if hasattr(self,'encoder_model') and self.encoder_model:

@@ -59,15 +59,17 @@ def delete_same_dict(save_data):
         json_file = json.load(open(file_name))
 
         if json_file == save_data:
-            files_to_delete.append(file_name.split("/").replace(".json",""))
+            files_to_delete.append(file_name.split("/")[-1].replace(".json",""))
 
     # TODO: For debugging 
     print("Files to delete are {}".format(files_to_delete))
     
     for file_name in files_to_delete:
-        os.remove("../models/model_data/{}.json".format(file_name))
-        shutil.rmtree("../models/{}/{}".format(args.dataset,file_name))
-
+        try:
+            os.remove("../models/model_data/{}.json".format(file_name))
+            shutil.rmtree("../models/{}/{}".format(args.dataset,file_name))
+        except:
+            print("File {} doesn't exist".format(file_name))
 
 def get_log_folder(args):
     """Determine the name of the folder where to store the model

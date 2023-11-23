@@ -284,11 +284,9 @@ if __name__ == "__main__":
 
     if args.type.lower() == 'synthetic_simple':
         create_sample_dataset(args.name, args.num_datapoints)
-    elif args.type.lower() == 'synthetic_2':
-        create_synthetic_2_dataset(args.num_datapoints)
-    elif args.type.lower() == 'synthetic_2_extra':
-        create_synthetic_2_dataset_extra()
     elif args.type.lower() == 'synthetic':
         create_synthetic_n_dataset(args.num_datapoints,args.num_objects,add_noise=args.noise)
     elif args.type.lower() == 'synthetic_extra':
         create_synthetic_n_dataset_extra(args.num_objects)
+    else:
+        raise Exception("{} not found".format(args.type.lower()))

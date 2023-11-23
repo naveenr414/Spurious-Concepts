@@ -4,7 +4,7 @@ import numpy as np
 import seaborn as sns
 
 colors = sns.color_palette("colorblind", 30)
-CUB_ATTRIBUTES = open("../cem/cem/CUB/metadata/attributes.txt").read().strip().split("\n")
+CUB_ATTRIBUTES = open("../../../../datasets/CUB/metadata/attributes.txt").read().strip().split("\n")
 CUB_ATTRIBUTES = [i.split(" ")[1] for i in CUB_ATTRIBUTES]+['Extra Node']
 
 def plot_most_important_classes(weights_by_class,labels, label_num,k=5,add_extra_node=False):
