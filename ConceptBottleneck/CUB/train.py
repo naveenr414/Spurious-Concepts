@@ -386,7 +386,7 @@ def train_X_to_C_to_y(args):
     # Load the model 
 
     if args.load_model != 'none':
-        model = torch.load(open("../results/models/{}.pt".format(args.load_model),"rb"))
+        model = torch.load(open("../models/{}".format(args.load_model),"rb"))
 
     # model.load_state_dict(weights)
 

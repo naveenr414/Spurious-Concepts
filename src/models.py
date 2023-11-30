@@ -115,8 +115,12 @@ def get_accuracy(model,model_function,dataset):
     
     for data in dataset:
         x,y,c = data
-        y_pred = logits_to_index(model_function(model,x.to(device))[0])
-        
+        x = x.to(device)
+        y_pred = logits_to_index(model_function(model,x)[0])
+        x = x.cpu()
+        y_pred = y_pred.cpu() 
+        y = y.cpu()
+
         total_datapoints += len(y)
         correct_datapoints += sum(y_pred == y)
         

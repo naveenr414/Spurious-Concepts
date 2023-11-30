@@ -361,6 +361,28 @@ def unroll_data(data_loader):
 
     return val_images.detach().cpu(), val_y.detach().cpu(), val_c.detach().cpu()
 
+def get_name_matching_parameters(parameters):
+    """Get the run name that matches parameters
+    
+    Arguments:
+        paramters: Dictionary of key, values for the parameters
+    
+    Returns: String, run name"""
+
+    all_model_data = glob.glob("../../models/model_data/*.json")
+    file_matches = []
+    for file_name in all_model_data:
+        real_name = file_name.split("/")[-1].replace(".json","")
+        json_data = json.load(open(file_name))
+
+        for key in parameters:
+            if json_data[key] != parameters[key]:
+                break 
+        else:
+            file_matches.append(real_name) 
+
+    return file_matches 
+
 def get_log_folder(dataset_name,parameters):
     """Get the path to the log folder based on arguments
     
@@ -375,17 +397,7 @@ def get_log_folder(dataset_name,parameters):
         
     """
 
-    all_model_data = glob.glob("../../models/model_data/*.json")
-    file_matches = []
-    for file_name in all_model_data:
-        real_name = file_name.split("/")[-1].replace(".json","")
-        json_data = json.load(open(file_name))
-
-        for key in parameters:
-            if json_data[key] != parameters[key]:
-                break 
-        else:
-            file_matches.append(real_name) 
+    file_matches = get_name_matching_parameters(parameters)
     assert len(file_matches) == 1
     
     return "{}/{}".format(dataset_name,file_matches[0])
@@ -645,3 +657,32 @@ def batch_run(function,list_of_vars,batch_size):
         results.append(function(list_of_vars[batch_start:batch_end]))
     
     return results
+
+def delete_same_dict(parameters,folder_name):
+    """Delete any data + model that's running the exact same experiment, 
+        so we can replace
+        
+    Arguments:
+        save_data: Dictionary, with information such as seed on the experiment
+        
+    Returns: Nothing
+    
+    Side Effects: Deletes any model + data with the same seed, etc. parameters"""
+
+    all_dicts = glob.glob("{}/*.json".format(folder_name))
+    files_to_delete = []
+
+    for file_name in all_dicts:            
+        json_file = json.load(open(file_name))
+
+        if json_file['parameters'] == parameters:
+            files_to_delete.append(file_name.split("/")[-1].replace(".json",""))
+
+    # TODO: For debugging 
+    print("Files to delete are {}".format(files_to_delete))
+    
+    for file_name in files_to_delete:
+        try:
+            os.remove("{}/{}.json".format(folder_name,file_name))
+        except:
+            print("File {} doesn't exist".format(file_name))

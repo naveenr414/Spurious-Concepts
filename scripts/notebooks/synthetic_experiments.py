@@ -16,7 +16,8 @@
 # %autoreload 2
 
 import sys
-sys.path.append('/usr0/home/naveenr/project/spurious_concepts/ConceptBottleneck/')
+sys.path.append('/usr0/home/naveenr/projects/spurious_concepts/ConceptBottleneck/')
+sys.path.append('/usr0/home/naveenr/projects/spurious_concepts')
 
 import torch
 from sklearn.metrics import roc_auc_score
@@ -43,12 +44,12 @@ from src.plot import *
 # +
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
-    num_objects = 4
-    encoder_model='small7'
+    num_objects = 1
+    encoder_model='mlp'
     seed = 42
-    epochs = 30
-    expand_dim_encoder = 0
-    num_middle_encoder = 0
+    epochs = 50
+    expand_dim_encoder = 5
+    num_middle_encoder = 2
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -65,6 +66,8 @@ else:
     encoder_model = args.encoder_model 
     seed = args.seed 
     epochs = args.epochs 
+    expand_dim_encoder = args.expand_dim_encoder
+    num_middle_encoder = args.num_middle_encoder
 
 parameters = {
     'seed': seed, 
@@ -73,7 +76,9 @@ parameters = {
     'num_attributes': num_objects*2,
     'expand_dim_encoder': expand_dim_encoder, 
     'num_middle_encoder': num_middle_encoder, 
+    'debugging': False,
 }
+print(parameters)
 
 # -
 
@@ -97,6 +102,10 @@ joint_model = get_synthetic_model(dataset_name,parameters)
 
 joint_model = joint_model.to(device)
 
+if encoder_model == 'mlp':
+    for i in range(len(joint_model.first_model.linear_layers)):
+        joint_model.first_model.linear_layers[i] = joint_model.first_model.linear_layers[i].to(device) 
+
 # ## Plot the Dataset
 
 dataset_directory = "../../../../datasets"
@@ -106,6 +115,8 @@ image = Image.open(img_path)
 plt.imshow(image)
 
 # ## Analyze Accuracy
+
+joint_model.first_model
 
 train_acc =  get_accuracy(joint_model,run_joint_model,train_loader).item()
 val_acc = get_accuracy(joint_model,run_joint_model,val_loader).item()

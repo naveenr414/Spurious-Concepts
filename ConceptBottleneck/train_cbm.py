@@ -85,13 +85,18 @@ def get_log_folder(args):
 
     if args.debugging:
         rand_name = 'debugging'
+    elif args.load_model != 'none':
+        rand_name = args.load_model.split("/")[-1].replace(".pt","")
 
-    log_folder = "../models/{}/{}".format(args.dataset,rand_name)
+    if args.load_model != 'none':
+        log_folder = "../models/pruned/synthetic/{}".format(rand_name)
     
-    if not args.debugging: 
-        delete_same_dict(save_data)
+    else:
+        log_folder = "../models/{}/{}".format(args.dataset,rand_name)
+        if not args.debugging: 
+            delete_same_dict(save_data)
 
-    json.dump(save_data,open("../models/model_data/{}.json".format(rand_name),"w"))
+        json.dump(save_data,open("../models/model_data/{}.json".format(rand_name),"w"))
 
     return log_folder
         
