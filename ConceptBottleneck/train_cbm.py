@@ -126,6 +126,8 @@ def main(args):
     mask_loss_weight = args.mask_loss_weight
     load_model = args.load_model
     train_variation = args.train_variation
+    scale_lr = args.scale_lr
+    scale_factor = args.scale_factor
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -193,7 +195,7 @@ def main(args):
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 64 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
-            f"-load_model {load_model} -train_variation {train_variation}"
+            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scale_factor {scale_factor}"
         )
         
         run_command(cmd)
@@ -220,6 +222,8 @@ if __name__ == "__main__":
     parser.add_argument('--load_model',type=str,default='none',help="Load in a pretrained model")
     parser.add_argument('--train_variation',type=str,default='none',help='Run the "half" training variation or the "loss" modification')
     parser.add_argument('--debugging', action='store_true')
+    parser.add_argument('--scale_lr',default=5,type=int)
+    parser.add_argument('--scale_factor',default=1.5,type=float)
 
     args = parser.parse_args()
     main(args)

@@ -148,7 +148,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
 
         if attr_criterion is not None:
             if args.train_variation == "loss":
-                SCALE_FACTOR = 1.5
+                SCALE_FACTOR = args.scale_factor
                 for (i,j) in top_pairs:
                     matching_data_0 = (attr_labels[:,i] == 1) & (attr_labels[:,j] == 0)
                     matching_data_1 = (attr_labels[:,i] == 0) & (attr_labels[:,j] == 1)
@@ -288,11 +288,11 @@ def train(model, args):
         train_concept_acc_meter = AverageMeter()
 
         if args.train_variation == "half" and epoch == args.epochs//2:
-            scale_lr = 5 
+            scale_lr = args.scale_lr 
             for param in model.sec_model.parameters():
                 param.requires_grad = True
 
-            new_lr = scheduler.get_lr()/scale_lr 
+            new_lr = scheduler.get_lr()[0]/scale_lr 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = new_lr
 
@@ -501,6 +501,10 @@ def parse_arguments(experiment):
             help='Name of the pre-trained model to load; if applicable')
         parser.add_argument('-train_variation',type=str,default='none',
             help='Run the "half" training variation or the "loss" modification')
+        parser.add_argument('-scale_lr',type=int,default=5,
+            help='How much to scale LR down by during "half" modification')
+        parser.add_argument('-scale_factor',type=float,default=1.5,
+            help='Scale factor for the "loss" modification')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)
