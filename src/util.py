@@ -379,7 +379,12 @@ def get_name_matching_parameters(parameters):
             if json_data[key] != parameters[key]:
                 break 
         else:
-            file_matches.append(real_name) 
+            for key in json_data:
+                if key not in parameters and key in ['train_variation']:
+                    if json_data[key] != 'none':
+                        break 
+            else:    
+                file_matches.append(real_name) 
 
     return file_matches 
 

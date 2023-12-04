@@ -156,7 +156,7 @@ def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
         if zero_one_loss == None:
             zero_one_loss = torch.Tensor([0.0 for i in range(c.shape[1])])
             
-        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1) == c,dim=0)
+        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1).cpu() == c.cpu(),dim=0)
                 
     zero_one_loss /= total_datapoints
         
@@ -510,14 +510,30 @@ def get_synthetic_model(dataset_name,parameters):
     """
 
     log_folder = get_log_folder(dataset_name,parameters)
-    joint_location = "../../models/{}/joint/best_model_{}.pth".format(log_folder,parameters['seed'])
-    joint_model = torch.load(joint_location,map_location='cpu')
 
-    if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:
-        joint_model.encoder_model = True
+    if 'model_type' in parameters and parameters['model_type'] == 'independent':
+        concept_location =  "../../models/{}/concept/best_model_{}.pth".format(log_folder,parameters['seed'])
+        concept_model = torch.load(concept_location,map_location='cpu')
 
-    r = joint_model.eval()
-    return joint_model
+        bottleneck_location =  "../../models/{}/bottleneck/best_model_{}.pth".format(log_folder,parameters['seed'])
+        bottleneck_model = torch.load(bottleneck_location,map_location='cpu')
+
+        if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:
+            concept_model.encoder_model = True
+        
+        r = concept_model.eval()
+        r = bottleneck_model.eval() 
+        return [concept_model,bottleneck_model]
+
+    else:
+        joint_location = "../../models/{}/joint/best_model_{}.pth".format(log_folder,parameters['seed'])
+        joint_model = torch.load(joint_location,map_location='cpu')
+
+        if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:
+            joint_model.encoder_model = True
+
+        r = joint_model.eval()
+        return joint_model
 
 def get_model_by_name(dataset_name,parameters):
     """Load a Model by Name, for CUB
