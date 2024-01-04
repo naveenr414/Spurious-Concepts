@@ -89,7 +89,8 @@ def get_log_folder(args):
         rand_name = args.load_model.split("/")[-1].replace(".pt","")
 
     if args.load_model != 'none':
-        log_folder = "../models/pruned/synthetic/{}".format(rand_name)
+        load_folder = "/".join(args.load_model.split("/")[:-1])
+        log_folder = "../models/{}/{}".format(load_folder,rand_name)
     
     else:
         log_folder = "../models/{}/{}".format(args.dataset,rand_name)
