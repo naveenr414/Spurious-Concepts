@@ -28,8 +28,8 @@ python synthetic_experiments.py --encoder_model small6 --epochs 50 --num_objects
 python synthetic_experiments.py --encoder_model small7 --epochs 50 --num_objects 8 --seed $seed 
 
 echo "MLP Models"
-python synthetic_experiments.py --encoder_model mlp --epochs 50 --num_objects 1 --expand_dim_encoder 0 --num_middle_encoder 0 --seed $seed
- 
+python synthetic_experiments.py --encoder_model mlp --epochs 50 --num_objects 1 --expand_dim_encoder 0 --num_middle_encoder 0 --seed $seed 
+
 for i in 5 10 15
 do 
     python synthetic_experiments.py --encoder_model mlp --epochs 50 --num_objects 1 --expand_dim_encoder $i --num_middle_encoder 1 --seed $seed 

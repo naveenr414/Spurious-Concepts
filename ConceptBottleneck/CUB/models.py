@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, SimpleConvNetN
+from CUB.template_model import MLP, inception_v3, End2EndModel, SimpleConvNetN, SimpleConvNetEqualParameter
 
 
 # Independent & Sequential Model
@@ -32,6 +32,11 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
         model1 = inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,
                               n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                               three_class=(n_class_attr == 3))
+    elif 'equal_parameter' in encoder_model:
+        num_layers = int(encoder_model[-1])
+        model1 = SimpleConvNetEqualParameter(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
+                            n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                            three_class=(n_class_attr == 3))
     elif 'small' in encoder_model:
         num_layers = int(encoder_model[-1])
         model1 = SimpleConvNetN(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
@@ -47,6 +52,7 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
         model2 = MLP(input_dim=n_attributes * n_class_attr, num_classes=num_classes, expand_dim=expand_dim)
     else:
         model2 = MLP(input_dim=n_attributes, num_classes=num_classes, expand_dim=expand_dim)
+
     return End2EndModel(model1, model2, use_relu, use_sigmoid, n_class_attr)
 
 # Standard Model

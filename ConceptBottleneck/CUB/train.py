@@ -12,13 +12,18 @@ import torch
 import numpy as np
 from analysis import Logger, AverageMeter, accuracy, binary_accuracy
 from sklearn.metrics import roc_auc_score
+from torchmetrics.classification import AUROC
 import pickle
+import time 
+from sklearn.metrics import roc_auc_score
 
 from CUB import probe, tti, gen_cub_synthetic, hyperopt
 from CUB.dataset import load_data, find_class_imbalance
 from CUB.config import BASE_DIR, N_CLASSES, N_ATTRIBUTES, UPWEIGHT_RATIO, MIN_LR, LR_DECAY_SIZE
 from CUB.models import ModelXtoCY, ModelXtoChat_ChatToY, ModelXtoY, ModelXtoC, ModelOracleCtoY, ModelXtoCtoY
 from CUB.sam import SAM
+import wandb
+from torch.optim.lr_scheduler import CyclicLR
 
 def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion, args, is_training):
     """
@@ -41,6 +46,7 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
         
         outputs = model(inputs_var)
         loss = criterion(outputs, labels_var)
+
         acc = accuracy(outputs, labels, topk=(1,))
         loss_meter.update(loss.item(), inputs.size(0))
         acc_meter.update(acc[0], inputs.size(0))
@@ -51,19 +57,16 @@ def run_epoch_simple(model, optimizer, loader, loss_meter, acc_meter, criterion,
             optimizer.step() #optimizer step to update parameters
     return loss_meter, acc_meter
 
-def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter,criterion, attr_criterion, args, epoch, top_pairs=[],is_training=True):
+def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter,concept_auc_meter,criterion, attr_criterion, args, epoch, scheduler, top_pairs=[],is_training=True):
     """
     For the rest of the networks (X -> A, cotraining, simple finetune)
     """
-
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
     if is_training:
         model.train()
     else:
         model.eval()
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model = model.to(device)
-        
     for _, data in enumerate(loader):
         if attr_criterion is None:
             inputs, labels = data
@@ -71,17 +74,14 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
         else:
             inputs, labels, attr_labels = data
             if args.n_attributes > 1:
-                attr_labels = [i.long() for i in attr_labels]
-                attr_labels = torch.stack(attr_labels).t()#.float() #N x 312
+                attr_labels = torch.stack(attr_labels).t()
             else:
                 if isinstance(attr_labels, list):
                     attr_labels = attr_labels[0]
                 attr_labels = attr_labels.unsqueeze(1)
-            attr_labels_var = torch.autograd.Variable(attr_labels).float()
-            attr_labels_var = attr_labels_var.cuda() if torch.cuda.is_available() else attr_labels_var
-            
-        inputs_var = torch.autograd.Variable(inputs).to(device)
-        labels_var = torch.autograd.Variable(labels).to(device)
+            attr_labels_var = attr_labels.float().to(device)
+        inputs_var = inputs.to(device)
+        labels_var = labels.to(device)
 
         loss_type = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
         
@@ -141,7 +141,13 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
         else:
             concept_predictions = torch.nn.Sigmoid()(torch.stack(outputs[1:])[:,:,0].T)
             concept_accuracy = binary_accuracy(concept_predictions,attr_labels)
+            auroc_metric = AUROC(pos_label=1)
+            flatten_predictions = torch.flatten(concept_predictions).detach().cpu()
+            flatten_labels = torch.flatten(attr_labels)
+            auc_score = auroc_metric(flatten_predictions, flatten_labels)
+            
             concept_acc_meter.update(concept_accuracy.cpu().numpy(),inputs.size(0))
+            concept_auc_meter.update(auc_score,inputs.size(0))
 
             acc = accuracy(outputs[0], labels, topk=(1,)) #only care about class prediction accuracy
             acc_meter.update(acc[0], inputs.size(0))
@@ -177,10 +183,23 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-    return loss_meter, acc_meter, concept_acc_meter 
+
+        if args.one_batch:
+            break
+
+        if args.scheduler == 'cyclic' and is_training: 
+            scheduler.step()
+    return loss_meter, acc_meter, concept_acc_meter, concept_auc_meter
 
 
 def train(model, args): 
+    wandb.login()
+    dataset = args.data_dir.split("/")[-2]
+    run = wandb.init(
+        project='spurious-concepts-{}'.format(dataset), 
+        config=vars(args) 
+    )
+
     imbalance = None
     if args.use_attr and not args.no_img and args.weighted_loss:
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
@@ -245,6 +264,26 @@ def train(model, args):
     else:
         attr_criterion = None
 
+    stop_epoch = int(math.log(MIN_LR / args.lr) / math.log(LR_DECAY_SIZE)) * args.scheduler_step
+    print("Stop epoch: ", stop_epoch)
+
+    train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
+    val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
+    logger.write('train data path: %s\n' % train_data_path)
+
+    resize = args.encoder_model=='inceptionv3' or 'dsprites' in args.data_dir or 'CUB' in args.data_dir or 'coco' in args.data_dir
+
+    if args.ckpt and args.ckpt!='0': #retraining
+        train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
+        val_loader = None
+    else:        
+        train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
+        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
+
+
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     elif args.optimizer == 'RMSprop':
@@ -254,25 +293,19 @@ def train(model, args):
     else:
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, threshold=0.00001, min_lr=0.00001, eps=1e-08)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=0.1)
-    stop_epoch = int(math.log(MIN_LR / args.lr) / math.log(LR_DECAY_SIZE)) * args.scheduler_step
-    print("Stop epoch: ", stop_epoch)
-
-    train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')
-    val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
-    logger.write('train data path: %s\n' % train_data_path)
-
-    resize = args.encoder_model=='inceptionv3' or 'dsprites' in args.data_dir or 'CUB' in args.data_dir
-
-    if args.ckpt: #retraining
-        train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize)
-        val_loader = None
-    else:        
-        train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling, experiment_name=args.experiment_name,resize=args.encoder_model=='inceptionv3')
-        val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, image_dir=args.image_dir, n_class_attr=args.n_class_attr, experiment_name=args.experiment_name,resize=resize)
     
+    if args.scheduler == 'none':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=1)
+    elif args.scheduler == 'step':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=0.1)
+    elif args.scheduler == 'cyclic':
+        base_lr = args.lr  # Initial learning rate
+        max_lr = 1    # Maximum learning rate
+        scheduler = CyclicLR(optimizer, base_lr=base_lr, max_lr=max_lr, step_size_up=len(train_loader)*10, mode='triangular')
+    else:
+        raise Exception("Scheduler {} not found".format(args.scheduler))
+
+
     best_val_epoch = -1
     best_val_loss = float('inf')
     best_val_acc = 0
@@ -281,11 +314,16 @@ def train(model, args):
         for param in model.sec_model.parameters():
             param.requires_grad = False
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
+
+
     for epoch in range(0, args.epochs):
         print("On epoch {}".format(epoch))
         train_loss_meter = AverageMeter()
         train_acc_meter = AverageMeter()
         train_concept_acc_meter = AverageMeter()
+        train_concept_auc_meter = AverageMeter()
 
         if args.train_variation == "half" and epoch == args.epochs//2:
             scale_lr = args.scale_lr 
@@ -295,29 +333,29 @@ def train(model, args):
             new_lr = scheduler.get_lr()[0]/scale_lr 
             for param_group in optimizer.param_groups:
                 param_group['lr'] = new_lr
-
         
         if args.no_img:
             train_loss_meter, train_acc_meter = run_epoch_simple(model, optimizer, train_loader, train_loss_meter, train_acc_meter,criterion, args, is_training=True)
         else:
-            train_loss_meter, train_acc_meter, train_concept_acc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter,  train_concept_acc_meter, criterion, attr_criterion, args, epoch, top_pairs=top_pairs,is_training=True)
-
+            train_loss_meter, train_acc_meter, train_concept_acc_meter, train_concept_auc_meter = run_epoch(model, optimizer, train_loader, train_loss_meter, train_acc_meter,  train_concept_acc_meter, train_concept_auc_meter, criterion, attr_criterion, args, epoch, scheduler, top_pairs=top_pairs,is_training=True)
             
-        if not args.ckpt: # evaluate on val set
+        if not (args.ckpt and args.ckpt!='0'): # evaluate on val set
             val_loss_meter = AverageMeter()
             val_acc_meter = AverageMeter()
             val_concept_acc_meter = AverageMeter()
+            val_concept_auc_meter = AverageMeter()
         
             with torch.no_grad():
                 if args.no_img:
                     val_loss_meter, val_acc_meter = run_epoch_simple(model, optimizer, val_loader, val_loss_meter, val_acc_meter, criterion, args, is_training=False)
                 else:
-                    val_loss_meter, val_acc_meter, val_concept_acc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, val_concept_acc_meter, criterion, attr_criterion, args, epoch, is_training=False)
+                    val_loss_meter, val_acc_meter, val_concept_acc_meter, val_concept_auc_meter = run_epoch(model, optimizer, val_loader, val_loss_meter, val_acc_meter, val_concept_acc_meter, val_concept_auc_meter,criterion, attr_criterion, args, epoch, scheduler,is_training=False)
 
         else: #retraining
             val_loss_meter = train_loss_meter
             val_acc_meter = train_acc_meter
             val_concept_acc_meter = train_concept_acc_meter
+            val_concept_auc_meter = train_concept_auc_meter
 
         if best_val_acc < val_acc_meter.avg: 
             best_val_epoch = epoch
@@ -331,14 +369,18 @@ def train(model, args):
 
         train_loss_avg = train_loss_meter.avg
         val_loss_avg = val_loss_meter.avg
-                
-        logger.write('Epoch [%d]:\tTrain loss: %.4f\tTrain accuracy: %.4f\tTrain concept accuracy: %.4f\t'
-                'Val loss: %.4f\tVal acc: %.4f\tVal concept acc: %.4f\t'
+        current_lr = scheduler.get_last_lr()[0]
+        wandb.log({"train": {'loss': train_loss_avg, 'acc': train_acc_meter.avg, 'concept_acc': train_concept_acc_meter.avg, 'concept_auc': train_concept_auc_meter.avg},
+                     "val": {'loss': val_loss_avg, 'acc': val_acc_meter.avg, 'concept_acc': val_concept_acc_meter.avg, 'concept_acc': val_concept_auc_meter.avg},
+                     "lr": current_lr})
+
+        logger.write('Epoch [%d]:\tTrain loss: %.4f\tTrain accuracy: %.4f\tTrain concept accuracy: %.4f\tTrain concept auc: %.4f\t'
+                'Val loss: %.4f\tVal acc: %.4f\tVal concept acc: %.4f\tVal concept auc: %.4f\t'
                 'Best val epoch: %d\n'
-                % (epoch, train_loss_avg, train_acc_meter.avg, train_concept_acc_meter.avg, val_loss_avg, val_acc_meter.avg, val_concept_acc_meter.avg, best_val_epoch)) 
+                % (epoch, train_loss_avg, train_acc_meter.avg, train_concept_acc_meter.avg, train_concept_auc_meter.avg,val_loss_avg, val_acc_meter.avg, val_concept_acc_meter.avg, val_concept_auc_meter.avg,best_val_epoch)) 
         logger.flush()
         
-        if epoch <= stop_epoch:
+        if epoch <= stop_epoch and args.scheduler != 'cyclic':
             scheduler.step(epoch) #scheduler step to update lr at the end of epoch     
         #inspect lr
         if epoch % 10 == 0:
@@ -384,9 +426,17 @@ def train_X_to_C_to_y(args):
                         use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder, 
                         num_middle_encoder=args.num_middle_encoder)
     # Load the model 
+    num_parameters = sum(p.numel() for p in model.parameters())
 
     if args.load_model != 'none':
         model = torch.load(open("../models/{}".format(args.load_model),"rb"))
+
+        if hasattr(model.first_model,'conv_layers'):
+            for i in range(3,len(model.first_model.conv_layers)):
+                for param in model.first_model.conv_layers[i].parameters():
+                    param.requires_grad = False
+
+
 
     # model.load_state_dict(weights)
 
@@ -446,6 +496,8 @@ def parse_arguments(experiment):
         parser.add_argument('-weight_decay', type=float, default=5e-5, help='weight decay for optimizer')
         parser.add_argument('-pretrained', '-p', action='store_true',
                             help='whether to load pretrained model & just fine-tune')
+        parser.add_argument('-one_batch', action='store_true',
+                            help='whether to only train on one batch; a form of debugging')
         parser.add_argument('-freeze', action='store_true', help='whether to freeze the bottom part of inception network')
         parser.add_argument('-use_aux', action='store_true', help='whether to use aux logits')
         parser.add_argument('-use_unknown', action='store_true',
@@ -505,6 +557,8 @@ def parse_arguments(experiment):
             help='How much to scale LR down by during "half" modification')
         parser.add_argument('-scale_factor',type=float,default=1.5,
             help='Scale factor for the "loss" modification')
+        parser.add_argument('-scheduler',type=str,default=1.5,
+            help='Scheduler, such as cyclic or none')
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)

@@ -128,6 +128,10 @@ def main(args):
     train_variation = args.train_variation
     scale_lr = args.scale_lr
     scale_factor = args.scale_factor
+    scheduler_step = args.scheduler_step
+    pretrained = args.pretrained 
+    one_batch = args.one_batch
+    scheduler = args.scheduler
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -188,14 +192,25 @@ def main(args):
         subprocess.check_output([cmd3], shell=True,stderr=subprocess.STDOUT)
 
     elif model_type == "joint":
+        # TODO: Add back in -pretrained
+        if pretrained: 
+            pretrained = " -pretrained"
+        else:
+            pretrained = ""
+        
+        if one_batch:
+            one_batch = " -one_batch"
+        else:
+            one_batch = ""
+
         cmd = (
-            f"python3 experiments.py cub Joint --seed {seed} -ckpt 1 -log_dir {log_folder}/{model_type} "
-            f"-e {epochs} -optimizer {optimizer} -pretrained -use_aux -weighted_loss multiple -use_attr "
+            f"python3 experiments.py cub Joint --seed {seed} -ckpt 0 -log_dir {log_folder}/{model_type} "
+            f"-e {epochs} -optimizer {optimizer} {one_batch} {pretrained} -use_aux -weighted_loss multiple -use_attr "
             f"-data_dir {dataset_folder}/{dataset}/preprocessed -n_attributes {num_attributes} "
-            f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 64 -weight_decay {weight_decay} -num_classes {num_classes} "
-            f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step 30 -end2end -use_sigmoid "
+            f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 32 -weight_decay {weight_decay} -num_classes {num_classes} "
+            f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step {scheduler_step} -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
-            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scale_factor {scale_factor}"
+            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor}"
         )
         
         run_command(cmd)
@@ -222,8 +237,12 @@ if __name__ == "__main__":
     parser.add_argument('--load_model',type=str,default='none',help="Load in a pretrained model")
     parser.add_argument('--train_variation',type=str,default='none',help='Run the "half" training variation or the "loss" modification')
     parser.add_argument('--debugging', action='store_true')
+    parser.add_argument('--pretrained', action='store_true')
     parser.add_argument('--scale_lr',default=5,type=int)
     parser.add_argument('--scale_factor',default=1.5,type=float)
+    parser.add_argument('--scheduler_step',default=30,type=int,help="How often to decrease the LR by a factor of 10")
+    parser.add_argument('--one_batch',action='store_true',help="Should we only train on one batch?")
+    parser.add_argument('--scheduler',type=str,default='none',help="'none' or 'cyclic'")
 
     args = parser.parse_args()
     main(args)

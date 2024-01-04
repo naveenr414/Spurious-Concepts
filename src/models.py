@@ -29,8 +29,9 @@ def run_joint_model(model,x):
     """
     
     output = model.forward(x)
-    y_pred = output[0].cpu()
-    c_pred = torch.stack(output[1:]).squeeze(-1).cpu()
+    output = [i.detach().cpu() for i in output]
+    y_pred = output[0]
+    c_pred = torch.stack(output[1:]).squeeze(-1)
     
     return y_pred, c_pred
 
@@ -98,6 +99,51 @@ def run_independent_model(model,x):
         
     return y_pred, c_pred.T
 
+def get_f1_concept(model,model_function,dataset,sigmoid=False):
+    """Compute the F1 score given a model + dataset combination
+    
+    Arguments
+        model: PyTorch model
+        model_function: Function to run either the independent or joint model
+        dataset: Data loader for the dataset
+        sigmoid: Whether to sigmoid the predictions so they're 0-1
+        
+    Returns: F1 Score, Float"""
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    epsilon=1e-7
+
+    avg_f1 = 0
+    tot_data = 0
+
+    with torch.no_grad():  # Use torch.no_grad() to disable gradient computation
+
+        for data in dataset:
+            x, y, c = data
+            c = torch.stack(c).T
+
+            c_pred = model_function(model,x.to(device))[1].T
+            c_pred = c_pred.detach()
+            if sigmoid:
+                c_pred = torch.nn.Sigmoid()(c_pred)            
+            c_pred = torch.clip(torch.round(c_pred),0,1)
+                        
+            tp = torch.sum(c * c_pred)
+            fp = torch.sum((1 - c) * c_pred)
+            fn = torch.sum(c * (1 - c_pred))
+            
+            precision = tp / (tp + fp + epsilon)
+            recall = tp / (tp + fn + epsilon)
+            
+            f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+            
+            f1 = f1.item()
+            avg_f1 += f1 
+            tot_data += 1
+
+    return avg_f1/tot_data
+
+
 def get_accuracy(model,model_function,dataset):
     """Compute model accuracy for a dataset
     
@@ -112,18 +158,16 @@ def get_accuracy(model,model_function,dataset):
     total_datapoints = 0
     correct_datapoints = 0 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    for data in dataset:
-        x,y,c = data
-        x = x.to(device)
-        y_pred = logits_to_index(model_function(model,x)[0])
-        x = x.cpu()
-        y_pred = y_pred.cpu() 
-        y = y.cpu()
 
-        total_datapoints += len(y)
-        correct_datapoints += sum(y_pred == y)
-        
+    with torch.no_grad():  # Use torch.no_grad() to disable gradient computation
+
+        for data in dataset:
+            x, y, c = data
+            y_pred = logits_to_index(model_function(model, x.to(device))[0].detach())
+
+            total_datapoints += len(y)
+            correct_datapoints += torch.sum(y_pred == y).item()  # Use .item() to get a Python number
+
     return correct_datapoints/total_datapoints
 
 def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
@@ -146,6 +190,7 @@ def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
         x,y,c = data
 
         c_pred = model_function(model,x.to(device))[1].T
+        c_pred = c_pred.detach()
         
         if sigmoid:
             c_pred = torch.nn.Sigmoid()(c_pred)
@@ -156,7 +201,7 @@ def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
         if zero_one_loss == None:
             zero_one_loss = torch.Tensor([0.0 for i in range(c.shape[1])])
             
-        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1).cpu() == c.cpu(),dim=0)
+        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1).cpu() == c.cpu(),dim=0).detach()
                 
     zero_one_loss /= total_datapoints
         

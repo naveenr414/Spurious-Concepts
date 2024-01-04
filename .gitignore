@@ -3,6 +3,7 @@ ConceptBottleneck/CUB/outputs
 ConceptBottleneck/results
 ConceptBottleneck/other_results/
 ConceptBottleneck/runs
+ConceptBottleneck/wandb
 results/
 src.egg-info/
 scripts/.ipynb_checkpoints

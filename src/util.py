@@ -263,7 +263,7 @@ def add_gaussian_noise(image, std_dev=25):
 
     return noisy_image
 
-def get_data(num_objects,encoder_model="small3"):
+def get_data(num_objects,encoder_model="small3",dataset_name=""):
     """Load the Synthetic Dataset for a given number of objects
 
     Arguments:
@@ -283,7 +283,8 @@ def get_data(num_objects,encoder_model="small3"):
     resampling = False
     resize = "inceptionv3" in encoder_model
 
-    dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
+    if dataset_name == "":
+        dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
 
     data_dir = "{}/{}/preprocessed/".format(dataset_directory,dataset_name)
 
@@ -361,7 +362,42 @@ def unroll_data(data_loader):
 
     return val_images.detach().cpu(), val_y.detach().cpu(), val_c.detach().cpu()
 
-def get_name_matching_parameters(parameters):
+def unroll_data_subset(data_loader,data_points):
+    """ Take the data in data_loader and turn it into torch Tensors
+        For a fixed subset of the data
+
+    Arguments:
+        data_loader: PyTorch data loader
+        data_points: List of integers, which subset to look at
+
+    Returns:
+        PyTorch tensors images (Batch x 3 x width x height), y, c
+
+    """
+
+    val_images = []
+    val_y = []
+    val_c = []
+
+    for i,batch in enumerate(data_loader):
+        x, y, c = batch  
+
+        relevant_indices = []
+        for k in range(i*len(batch),(i+1)*len(batch)):
+            if k in data_points:
+                relevant_indices.append(k-i*len(batch))
+
+        val_images.append(x[relevant_indices])
+        val_y.append(y[relevant_indices])
+        val_c.append(torch.stack(c).T[relevant_indices])
+    val_images = torch.cat(val_images, dim=0)
+    val_y = torch.cat(val_y,dim=0)
+    val_c = torch.cat(val_c,dim=0)
+
+    return val_images.detach().cpu(), val_y.detach().cpu(), val_c.detach().cpu()
+
+
+def get_name_matching_parameters(parameters,folder_name="models/model_data"):
     """Get the run name that matches parameters
     
     Arguments:
@@ -369,11 +405,14 @@ def get_name_matching_parameters(parameters):
     
     Returns: String, run name"""
 
-    all_model_data = glob.glob("../../models/model_data/*.json")
+    all_model_data = glob.glob("../../{}/*.json".format(folder_name))
     file_matches = []
     for file_name in all_model_data:
         real_name = file_name.split("/")[-1].replace(".json","")
         json_data = json.load(open(file_name))
+
+        if "pruning" in folder_name:
+            json_data = json_data['parameters']
 
         for key in parameters:
             if json_data[key] != parameters[key]:
@@ -526,9 +565,31 @@ def get_part_location(data_point, attribute_num, locations_by_image, val_pkl):
     x,y = locations_by_image[val_pkl[data_point]['id']][attribute_num] 
     new_point = convert_point(x,y,width,height)
 
-    return new_point 
+    return new_point
 
-def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=10):
+def get_new_x_y(bbox,idx,val_pkl):
+    """Get the new bounding box for an image in the Coco dataset
+        Scale it using the 299x299 images used for InceptionV3
+
+    Arguments:
+        bbox: Array with [x,y,width,height]
+        idx: Which idx in val_pkl we're looking at
+        val_pkl: Pickle file with all the image metadata
+
+    Returns:
+        New bounding box of the form [x,y,width,height]
+            Where x,y starts from top left 
+    """ 
+
+    width, height = get_image_dimensions(dataset_directory+"/"+ val_pkl[idx]['img_path'])
+    x,y = bbox[0],bbox[1]
+    new_x,new_y = convert_point(x,y,width,height)
+    new_width,new_height = round(299*bbox[2]/width), round(229*bbox[3]/height)
+
+    return [new_x,new_y,new_width,new_height]
+
+
+def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.1):
     """Given a PyTorch array img, fill in black at points closest to the attribute
     
     Arguments: 
@@ -540,13 +601,15 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=10
         
     Returns: New PyTorch Tensor"""
 
-    # TODO: Make this more general
+    # Due to normalizing of image
     color = (np.array(color)-0.5)/2
 
-    for x in range(location[0]-epsilon,location[0]+epsilon+1):
-        for y in range(location[1]-epsilon,location[1]+epsilon+1):
+    epsilon_scaled = round(epsilon*img.shape[1])
+
+    for x in range(location[0]-epsilon_scaled,location[0]+epsilon_scaled+1):
+        for y in range(location[1]-epsilon_scaled,location[1]+epsilon_scaled+1):
             dist = (x-location[0])**2 + (y-location[1])**2
-            if dist < epsilon**2:
+            if dist < epsilon_scaled**2:
                 if x<0 or y<0 or x>=299 or y >=299:
                     continue 
                 for (x_,y_) in other_locations:
@@ -556,7 +619,25 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=10
                 else:
                     for k in range(3):
                         img[k,y,x] = color[k]
+    return img
+
+def mask_bbox(img, bbox_list, color=(0,0,0)):
+    """Given a PyTorch array img, fill in black at points within each bounding box
+    
+    Arguments: 
+        img: PyTorch Tensor
+        bbox_list: List of bounding boxes
+        color: 3-Tuple with the color to fill in
+        
+    Returns: New PyTorch Tensor"""
+
+    color = (np.array(color)-0.5)/2
+    
+    for bbox in bbox_list:
+        tiled_tensor = torch.Tensor(color).tile((bbox[3],bbox[2])).view(3, bbox[3], bbox[2])
+        img[:,bbox[1]:bbox[1]+bbox[3],bbox[0]:bbox[0]+bbox[2]] = tiled_tensor
     return img 
+ 
 
 def mask_image_location(img, location, color=(0,0,0), epsilon=10):
     """Given a PyTorch array img, fill in a circle centered at location with color
@@ -569,19 +650,21 @@ def mask_image_location(img, location, color=(0,0,0), epsilon=10):
         
     Returns: New PyTorch Tensor"""
 
-    # TODO: Make this more general
+    # Due to normalizing 
     color = (np.array(color)-0.5)/2
 
-    for x in range(location[0]-epsilon,location[0]+epsilon+1):
-        for y in range(location[1]-epsilon,location[1]+epsilon+1):
-            if (x-location[0])**2 + (y-location[1])**2 < epsilon**2:
+    epsilon_scaled = round(epsilon*img.shape[1])
+
+    for x in range(location[0]-epsilon_scaled,location[0]+epsilon_scaled+1):
+        for y in range(location[1]-epsilon_scaled,location[1]+epsilon_scaled+1):
+            dist = (x-location[0])**2 + (y-location[1])**2
+            if dist < epsilon_scaled**2:
                 if x<0 or y<0 or x>=299 or y >=299:
                     continue 
-
-                for k in range(3):
-                    img[k,y,x] = color[k]
-
-    return img 
+                else:
+                    for k in range(3):
+                        img[k,y,x] = color[k]
+    return img
 
 def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images,color=(0,0,0),epsilon=10):
     """Create a new image with a specific part masked out by the color
@@ -682,9 +765,6 @@ def delete_same_dict(parameters,folder_name):
 
         if json_file['parameters'] == parameters:
             files_to_delete.append(file_name.split("/")[-1].replace(".json",""))
-
-    # TODO: For debugging 
-    print("Files to delete are {}".format(files_to_delete))
     
     for file_name in files_to_delete:
         try:

@@ -54,6 +54,7 @@ if is_jupyter:
     scale_factor = 1.5
     scale_lr = 5
     model_type = 'joint'
+    noisy = True 
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -68,6 +69,7 @@ else:
     parser.add_argument('--scale_lr', type=int, default=5, help='For the half train variation, how much to decrease LR by')
     parser.add_argument('--scale_factor', type=float, default=1.5, help='For the loss train variation, how much to scale loss by')
     parser.add_argument('--model_type', type=str, default='joint', help='"joint" or "independent" model')
+    parser.add_argument('--noisy', dest='noisy',default=False,action='store_true')
 
     args = parser.parse_args()
     num_objects = args.num_objects
@@ -80,8 +82,12 @@ else:
     scale_factor = args.scale_factor 
     scale_lr = args.scale_lr 
     model_type = args.model_type 
+    noisy = args.noisy
 
-dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
+if noisy:
+    dataset_name = "synthetic_object/synthetic_{}_noisy".format(num_objects)
+else:
+    dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
 
 parameters = {
     'seed': seed, 
@@ -91,6 +97,7 @@ parameters = {
     'expand_dim_encoder': expand_dim_encoder, 
     'num_middle_encoder': num_middle_encoder, 
     'debugging': False,
+    'noisy': noisy, 
 }
 
 if train_variation != 'none':
@@ -110,7 +117,7 @@ print(parameters)
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(num_objects,encoder_model=encoder_model)
+train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(num_objects,encoder_model=encoder_model,dataset_name=dataset_name)
 
 test_images, test_y, test_c = unroll_data(test_loader)
 
@@ -208,7 +215,7 @@ final_data = {
     'concept_accuracy': accuracy_by_concept_train.tolist(), 
     'adversarial_activations': np.array(activation_values).tolist(),  
     'parameters': parameters, 
-    'run_name': log_folder, 
+    'run_name': log_folder,
 }
 
 final_data 
