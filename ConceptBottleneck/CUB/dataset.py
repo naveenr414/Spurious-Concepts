@@ -199,7 +199,7 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
         sampler = BatchSampler(ImbalancedDatasetSampler(dataset), batch_size=batch_size, drop_last=drop_last)
         loader = DataLoader(dataset, batch_sampler=sampler)
     else:
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=2,pin_memory=True)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,num_workers=1)
     return loader
 
 def find_class_imbalance(pkl_file, multiple_attr=False, attr_idx=-1):

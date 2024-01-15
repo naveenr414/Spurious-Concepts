@@ -39,24 +39,27 @@ import secrets
 import subprocess
 import shutil 
 from torch.nn.utils import prune
+import resource 
 
 from src.images import *
 from src.util import *
 from src.models import *
 from src.plot import *
 
+torch.set_num_threads(1)
+
 # +
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
-    num_objects = 2
-    encoder_model='small3'
+    num_objects = 1
+    encoder_model='small7'
     seed = 42
-    retrain_epochs = 0
+    retrain_epochs = 5
     pruning_technique = 'weight'
     expand_dim_encoder = 0
     num_middle_encoder = 0
-    prune_rate = 0.25
-    dataset_name = "synthetic_object/synthetic_2"
+    prune_rate = 0.95
+    dataset_name = "synthetic_object/synthetic_{}".format(num_objects)
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -95,6 +98,8 @@ parameters = {
     'dataset_name': dataset_name,
 }
 print(parameters)
+torch.cuda.set_per_process_memory_fraction(0.5)
+resource.setrlimit(resource.RLIMIT_AS, (20 * 1024 * 1024 * 1024, -1))
 
 # -
 
@@ -107,7 +112,7 @@ test_images, test_y, test_c = unroll_data(test_loader)
 
 rand_name = secrets.token_hex(4)
 results_file = "../../results/pruning/{}.json".format(rand_name)
-delete_same_dict("../../results/pruning",parameters)
+delete_same_dict(parameters,"../../results/pruning")
 
 model_parameters = {
     'debugging': False, 
@@ -117,6 +122,8 @@ model_parameters = {
     'num_attributes': num_objects*2,
     'expand_dim_encoder': expand_dim_encoder, 
     'num_middle_encoder': num_middle_encoder, 
+    'dataset': dataset_name, 
+    'model_type': 'joint'
 }
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -226,16 +233,26 @@ def numpy_to_pil(img):
     return im
 
 
+# !OMP_NUM_THREADS=1 
+
 # +
 activation_values = []
 
 for concept_num in range(num_objects*2):
+    train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(num_objects,encoder_model=encoder_model,dataset_name=dataset_name)
+    test_images, test_y, test_c = unroll_data(test_loader)
     val_for_concept = 0
     trials = 5
 
+    previous_points = set()
+
     for _ in range(trials):
+        assert len(test_images) > trials 
         data_point = random.randint(0,len(test_images)-1)
-        input_image = deepcopy(test_images[data_point:data_point+1])
+        while data_point in previous_points:
+            data_point = random.randint(0,len(test_images)-1)
+        previous_points.add(data_point)
+        input_image = test_images[data_point:data_point+1]
         current_concept_val = test_c[data_point][concept_num]
 
         ret_image = get_maximal_activation(joint_model,run_joint_model,concept_num,

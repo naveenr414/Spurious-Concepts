@@ -16,6 +16,7 @@ from torchmetrics.classification import AUROC
 import pickle
 import time 
 from sklearn.metrics import roc_auc_score
+import resource 
 
 from CUB import probe, tti, gen_cub_synthetic, hyperopt
 from CUB.dataset import load_data, find_class_imbalance
@@ -193,6 +194,9 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
 
 
 def train(model, args): 
+    torch.cuda.set_per_process_memory_fraction(0.5)
+    torch.set_num_threads(1)
+    resource.setrlimit(resource.RLIMIT_AS, (30 * 1024 * 1024 * 1024, -1))
     wandb.login()
     dataset = args.data_dir.split("/")[-2]
     run = wandb.init(
@@ -297,7 +301,7 @@ def train(model, args):
     if args.scheduler == 'none':
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=1)
     elif args.scheduler == 'step':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.scheduler_step, gamma=0.25)
     elif args.scheduler == 'cyclic':
         base_lr = args.lr  # Initial learning rate
         max_lr = 1    # Maximum learning rate

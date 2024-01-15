@@ -37,6 +37,8 @@ from matplotlib.patches import Circle
 import json
 import argparse
 import logging 
+import resource
+import gc 
 
 from ConceptBottleneck.CUB.dataset import load_data
 
@@ -47,6 +49,10 @@ from src.plot import *
 
 # ## Set up dataset + model
 
+torch.cuda.set_per_process_memory_fraction(0.5)
+resource.setrlimit(resource.RLIMIT_AS, (30 * 1024 * 1024 * 1024, -1))
+torch.set_num_threads(1)
+
 logging.basicConfig(level=logging.INFO)
 logging.info("Setting up dataset")
 
@@ -54,25 +60,29 @@ logging.info("Setting up dataset")
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
     encoder_model='inceptionv3'
-    seed = 42
+    seed = 43
     dataset_name = "CUB"
+    train_variation = "half"
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--train_variation', type=str, default='none', help='Which train variation to analyze')
 
     args = parser.parse_args()
     encoder_model = "inceptionv3" 
     seed = args.seed 
     dataset_name = "CUB"
+    train_variation = args.train_variation
 
 parameters = {
+    'dataset': dataset_name,
     'seed': seed, 
     'encoder_model': encoder_model ,
-    'dataset': dataset_name,
     'debugging': False,
     'epochs': 100,
-    'lr': 0.005
+    'lr': 0.005,
+    'train_variation': train_variation,
 }
 
 # -
@@ -192,6 +202,8 @@ for main_part in valid_parts:
     for mask_part in valid_parts:
         main_attributes = parts_to_attribute[str(main_part)]
         mask_attributes = parts_to_attribute[str(mask_part)]
+        test_images, test_y, test_c = None, None, None 
+        gc.collect() 
         test_images, test_y, test_c = unroll_data(test_loader)
 
         valid_data_points = [i for i in range(len(test_pkl)) if main_part in locations_by_image_id[test_pkl[i]['id']] and mask_part in locations_by_image_id[test_pkl[i]['id']]]
@@ -220,6 +232,7 @@ results = {
         'parts': part_list, 
         'images_per_mask': test_data_num, 
         'dataset': 'CUB', 
+        'train_variation': train_variation, 
     }, 
     'train_acc': train_acc,
     'val_acc': val_acc,
@@ -230,6 +243,12 @@ for i in results['part_mask']:
     for j in results['part_mask'][i]:
         results['part_mask'][i][j] = (float(results['part_mask'][i][j][0]),float(results['part_mask'][i][j][1]))
 
-json.dump(results,open("../../results/cub/mask_epsilon_{}.json".format(seed),"w"))
+save_name = "mask_epsilon_{}.json".format(seed)
+if train_variation != 'none':
+    save_name = "mask_epsilon_{}_{}.json".format(train_variation,seed)
+
+json.dump(results,open("../../results/cub/{}".format(save_name),"w"))
+
+
 
 

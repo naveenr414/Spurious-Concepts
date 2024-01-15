@@ -15,6 +15,7 @@ from scipy.stats import wasserstein_distance
 from copy import deepcopy 
 import glob 
 import json 
+import os
 
 dataset_directory = "../../../../datasets"
 
@@ -90,8 +91,9 @@ def plot_saliency(model,model_function,concept_num,x,input_num,pkl_list=None,plo
     """
     
     x.requires_grad = True
-
-    y,c = model_function(model,x)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    y,c = model_function(model.to('cpu'),x.to('cpu'),detach=False)
+    model.to(device)
 
     grads = torch.autograd.grad(c[concept_num], x, grad_outputs=torch.ones_like(c[concept_num]), retain_graph=True)
     grads = grads[0]
@@ -126,16 +128,18 @@ def plot_integrated_gradients(model,model_function,concept_num,x,input_num,pkl_l
     
     x.requires_grad = True
     input_img = x[input_num:input_num+1]
-    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     def single_output_forward():
         def forward(x):
-            y,c = model_function(model,x)
+            y,c = model_function(model.to('cpu'),x.to('cpu'),detach=False)
             return c.T
         return forward
     
     fwd_fn = single_output_forward()
     integrated_gradients = IntegratedGradients(fwd_fn)
     attributions_ig = integrated_gradients.attribute(input_img, target = concept_num, n_steps=200)
+
+    model.to(device)
 
     if plot:
         default_cmap = LinearSegmentedColormap.from_list('custom blue',
@@ -173,11 +177,14 @@ def plot_gradcam(model,model_function,concept_num,x,input_num,pkl_list, plot=Tru
     """
     
     x.requires_grad = True
-    y,c = model_function(model,x[input_num:input_num+1])
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    y,c = model_function(model,x[input_num:input_num+1].to(device),detach=False)
     conv_output_0 = model.first_model.last_conv_output
     preds = c.T[:, concept_num]
+    c = c.cpu()
 
     grads = torch.autograd.grad(preds, conv_output_0)
+    c = c.detach()
     pooled_grads = grads[0].mean((0,2,3))
     
     conv_squeezed = conv_output_0.squeeze()
@@ -410,12 +417,13 @@ def get_name_matching_parameters(parameters,folder_name="models/model_data"):
     for file_name in all_model_data:
         real_name = file_name.split("/")[-1].replace(".json","")
         json_data = json.load(open(file_name))
+        if 'noisy' not in json_data:
+            json_data['noisy'] = False
 
         if "pruning" in folder_name:
             json_data = json_data['parameters']
-
         for key in parameters:
-            if json_data[key] != parameters[key]:
+            if key not in json_data or json_data[key] != parameters[key]:
                 break 
         else:
             for key in json_data:
@@ -423,8 +431,9 @@ def get_name_matching_parameters(parameters,folder_name="models/model_data"):
                     if json_data[key] != 'none':
                         break 
             else:    
-                file_matches.append(real_name) 
-
+                file_matches.append((real_name,os.path.getmtime(file_name)))
+    file_matches = sorted(file_matches,key=lambda k: k[1])
+    file_matches = [i[0] for i in file_matches]
     return file_matches 
 
 def get_log_folder(dataset_name,parameters):
@@ -442,6 +451,8 @@ def get_log_folder(dataset_name,parameters):
     """
 
     file_matches = get_name_matching_parameters(parameters)
+    if len(file_matches) != 1:
+        print(file_matches)
     assert len(file_matches) == 1
     
     return "{}/{}".format(dataset_name,file_matches[0])
@@ -651,6 +662,7 @@ def mask_image_location(img, location, color=(0,0,0), epsilon=10):
     Returns: New PyTorch Tensor"""
 
     # Due to normalizing 
+    # Due to normalizing of image
     color = (np.array(color)-0.5)/2
 
     epsilon_scaled = round(epsilon*img.shape[1])
@@ -661,9 +673,8 @@ def mask_image_location(img, location, color=(0,0,0), epsilon=10):
             if dist < epsilon_scaled**2:
                 if x<0 or y<0 or x>=299 or y >=299:
                     continue 
-                else:
-                    for k in range(3):
-                        img[k,y,x] = color[k]
+                for k in range(3):
+                    img[k,y,x] = color[k]
     return img
 
 def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images,color=(0,0,0),epsilon=10):
@@ -763,7 +774,10 @@ def delete_same_dict(parameters,folder_name):
     for file_name in all_dicts:            
         json_file = json.load(open(file_name))
 
-        if json_file['parameters'] == parameters:
+        for p in parameters:
+            if p not in json_file['parameters'] or parameters[p] != json_file['parameters'][p]:
+                break 
+        else:
             files_to_delete.append(file_name.split("/")[-1].replace(".json",""))
     
     for file_name in files_to_delete:

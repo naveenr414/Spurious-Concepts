@@ -54,7 +54,7 @@ if is_jupyter:
     scale_factor = 1.5
     scale_lr = 5
     model_type = 'joint'
-    noisy = True 
+    noisy = False 
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -97,7 +97,7 @@ parameters = {
     'expand_dim_encoder': expand_dim_encoder, 
     'num_middle_encoder': num_middle_encoder, 
     'debugging': False,
-    'noisy': noisy, 
+    'dataset': dataset_name,
 }
 
 if train_variation != 'none':
@@ -111,6 +111,8 @@ if train_variation != 'none':
 parameters['model_type'] = model_type 
 
 print(parameters)
+torch.cuda.set_per_process_memory_fraction(0.5)
+
 
 # -
 
@@ -152,11 +154,9 @@ plt.imshow(image)
 
 # ## Analyze Accuracy
 
-train_acc =  get_accuracy(joint_model,run_model_function,train_loader).item()
-val_acc = get_accuracy(joint_model,run_model_function,val_loader).item()
-test_acc =get_accuracy(joint_model,run_model_function,val_loader).item()
-
-accuracy_by_concept_train = get_concept_accuracy_by_concept(joint_model,run_model_function,train_loader,sigmoid=True).detach().numpy()
+train_acc =  get_accuracy(joint_model,run_model_function,train_loader)
+val_acc = get_accuracy(joint_model,run_model_function,val_loader)
+test_acc =get_accuracy(joint_model,run_model_function,val_loader)
 
 
 # ## Analyze Concept-Input Relationships
@@ -173,6 +173,8 @@ def numpy_to_pil(img):
     im = Image.fromarray(unnormalized_image.transpose(1,2,0))
     return im
 
+
+joint_model.to(device)
 
 # +
 activation_values = []
@@ -206,13 +208,26 @@ else:
     joint_model = joint_model.cpu()
 torch.cuda.empty_cache()
 
-activation_values 
+# ## Analyze Saliency Maps
+
+
+
+if is_jupyter:
+    for method, method_name in zip(
+        [plot_gradcam,plot_integrated_gradients,plot_saliency],
+        ['gradcam','integrated_gradients','saliency']
+    ):
+        print(method_name)
+        plt.figure()
+        ret = method(joint_model,run_joint_model,0,test_images,0,test_pkl,plot=True)
+        plt.savefig("../../results/explanations/{}_{}_synthetic_2.png".format(method_name,encoder_model))
+        torch.cuda.empty_cache()
+
 
 final_data = {
     'train_accuracy': train_acc, 
     'val_accuracy': val_acc, 
     'test_accuracy': test_acc, 
-    'concept_accuracy': accuracy_by_concept_train.tolist(), 
     'adversarial_activations': np.array(activation_values).tolist(),  
     'parameters': parameters, 
     'run_name': log_folder,

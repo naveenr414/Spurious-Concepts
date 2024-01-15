@@ -57,36 +57,45 @@ if is_jupyter:
     seed = 42
     expand_dim_encoder = 0
     num_middle_encoder = 0
-    mask_radius = 0.01
     dataset_name = "coco"
+    train_variation = "half"
+    scale_lr = 5
+    scale_factor = 1
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
-    parser.add_argument('--encoder_model', type=str, default='small3', help='Encoder model')
+    parser.add_argument('--encoder_model', type=str, default='inceptionv3', help='Encoder model')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--expand_dim_encoder', type=int, default=0, help='For MLPs, size of the middle layer')
-    parser.add_argument('--num_middle_encoder', type=int, default=0, help='For MLPs, number of middle layers')
-    parser.add_argument('--mask_radius', type=float, default=.01, help='Radius of the mask for masking')
-    parser.add_argument('--dataset_name', type=str, default="CUB", help='Dataset to analyze, such as CUB')
+    parser.add_argument('--dataset_name', type=str, default="coco", help='Dataset to analyze, such as coco')
+    parser.add_argument('--train_variation', type=str, default="none", help='Variation on training, such as scale_lr')
+    parser.add_argument('--scale_lr', type=float, default=1.0, help='How much does the learning rate decrease by')
+    parser.add_argument('--scale_factor', type=float, default=1.0, help='How much do scale the loss by')
 
     args = parser.parse_args()
     encoder_model = args.encoder_model 
     seed = args.seed 
-    expand_dim_encoder = args.expand_dim_encoder
-    num_middle_encoder = args.num_middle_encoder
-    mask_radius = args.mask_radius 
     dataset_name = args.dataset_name
+    train_variation = args.train_variation
+    scale_lr = args.scale_lr 
+    scale_factor = args.scale_factor
 
 parameters = {
     'seed': seed, 
     'encoder_model': encoder_model ,
     'dataset': dataset_name,
     'debugging': False,
-    'epochs': 100,
-    'lr': 5e-4, 
-    "attr_loss_weight": 0.05, 
+    'epochs': 25,
+    'lr': 0.005, 
+    "attr_loss_weight": 0.1, 
     'scheduler': 'none'
 }
+
+if train_variation == 'half':
+    parameters['train_variation'] = train_variation 
+    parameters['scale_lr'] = scale_lr 
+elif train_variation == 'loss':
+    parameters['train_variation'] = train_variation 
+    parameters['scale_factor'] = scale_factor 
 
 # -
 
@@ -99,7 +108,7 @@ results_folder = "../../results/{}/{}".format(dataset_name.lower(),log_folder)
 if not os.path.exists(results_folder): 
     os.makedirs(results_folder)
 
-device = 'cpu' # 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 joint_model = get_synthetic_model(dataset_name,parameters)
 
@@ -113,9 +122,20 @@ logging.info("Plotting Dataset")
 
 dataset_directory = "../../../../datasets"
 
+# +
+concepts = pickle.load(open(dataset_directory+"/coco/preprocessed/concepts.pkl","rb"))
+concept_names = json.load(open(dataset_directory+"/coco/preprocessed/instances_train2014.json"))['categories']
+concept_names_from_id = {}
+
+for i in concept_names:
+    concept_names_from_id[i['id']] = i['name']
+relevant_concepts = [concept_names_from_id[i] for i in concepts]
+# -
+
 img_path = dataset_directory+'/'+train_pkl[0]['img_path']
 image = Image.open(img_path)
 plt.imshow(image)
+[relevant_concepts[i] for i,val in enumerate(train_pkl[0]['attribute_label']) if val == 1]
 
 # ## Accuracy
 
@@ -123,7 +143,10 @@ train_acc =  get_accuracy(joint_model,run_model_function,train_loader)
 val_acc = get_accuracy(joint_model,run_model_function,val_loader)
 test_acc = get_accuracy(joint_model,run_model_function,test_loader)
 
+train_acc, val_acc, test_acc
+
 test_concept_f1 = get_f1_concept(joint_model,run_model_function,test_loader)
+test_concept_f1
 
 torch.cuda.empty_cache()
 
@@ -170,13 +193,14 @@ valid_pairs = [(i,j) for i in range(len(concepts)) for j in range(len(concepts))
 
 for (main_part,mask_part) in valid_pairs:
     print("On main part {}".format(main_part))
-    if main_part not in results_by_part_mask:
+    if concepts[main_part] not in results_by_part_mask:
         results_by_part_mask[concepts[main_part]] = {}
 
     test_images, test_y, test_c = unroll_data(test_loader)
     valid_data_points = [k for k in range(len(test_pkl)) if test_c[k][main_part] == 1 and test_c[k][mask_part] == 1]
     data_points = random.sample(valid_data_points,test_data_num)
     masked_dataset = [mask_bbox(test_images[idx],[get_new_x_y(locations_by_image[test_pkl[idx]['id']][mask_part][k],idx,test_pkl) for k in range(len(locations_by_image[test_pkl[idx]['id']][mask_part]))]) for idx in data_points]
+    masked_dataset = torch.stack(masked_dataset)
 
     final_predictions = None 
     with torch.no_grad():
@@ -194,11 +218,16 @@ results = {
         'seed': seed, 
         'concepts': concepts, 
         'images_per_mask': test_data_num, 
-        'dataset': 'Coco', 
+        'dataset': 'coco', 
+        'train_variation': train_variation, 
+        'scale_lr': scale_lr, 
+        'scale_factor': scale_factor, 
     }, 
     'train_acc': train_acc,
     'val_acc': val_acc,
     'test_acc': test_acc,
 }
 
-json.dump(results_by_part_mask,open("results/coco/mask_{}.json".format(seed),"w"))
+json.dump(results,open("../../results/coco/mask_{}_{}.json".format(train_variation,seed),"w"))
+
+

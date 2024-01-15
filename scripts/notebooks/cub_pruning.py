@@ -48,37 +48,30 @@ from src.plot import *
 # +
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
-    num_objects = 2
     encoder_model='inceptionv3'
     seed = 42
     retrain_epochs = 0
     pruning_technique = 'weight'
-    expand_dim_encoder = 0
-    num_middle_encoder = 0
     prune_rate = 0.25
     dataset_name = "CUB"
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
 
-    parser.add_argument('--num_objects', type=int, default=1, help='Number of objects')
     parser.add_argument('--encoder_model', type=str, default='small3', help='Encoder model')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--retrain_epochs', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--expand_dim_encoder', type=int, default=0, help='For MLPs, size of the middle layer')
-    parser.add_argument('--num_middle_encoder', type=int, default=0, help='For MLPs, number of middle layers')
     parser.add_argument('--pruning_technique', type=str, default='weight', help='"layer" or "weight" pruning')
     parser.add_argument('--prune_rate', type=float, default=0.25, help='Rate of pruning')
-    parser.add_argument('--dataset_name', type=str, default='synthetic_object/synthetic_1', help='Which dataset to use')
 
     args = parser.parse_args()
-    num_objects = args.num_objects
     encoder_model = args.encoder_model 
     seed = args.seed 
     retrain_epochs = args.retrain_epochs 
     pruning_technique = args.pruning_technique 
     prune_rate = args.prune_rate
-    dataset_name = args.dataset_name
+
+dataset_name = "CUB"
 
 parameters = {
     'seed': seed, 
@@ -97,7 +90,7 @@ print(parameters)
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(num_objects,encoder_model=encoder_model,dataset_name=dataset_name)
+train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(1,encoder_model=encoder_model,dataset_name=dataset_name)
 
 test_images, test_y, test_c = unroll_data(test_loader)
 
@@ -177,7 +170,7 @@ joint_model = None
 
 torch.cuda.empty_cache()
 
-command_to_run = "python train_cbm.py -dataset CUB -epochs {} --load_model pruned/cub/{}.pt -num_attributes 112 --encoder_model {} -num_classes 200 -seed {}".format(retrain_epochs,rand_name,encoder_model,seed)
+command_to_run = "python train_cbm.py -dataset CUB -epochs {} --load_model pruned/cub/{}.pt -num_attributes 112 --encoder_model {} -num_classes 200 -seed {} -lr 0.005".format(retrain_epochs,rand_name,encoder_model,seed)
 
 command_to_run
 
@@ -277,7 +270,7 @@ results_by_part_mask = {}
 epsilon = 0.3
 test_data_num = 100
 
-for main_part in valid_parts[:1]:
+for main_part in valid_parts:
     print("Main part is {}".format(main_part))
     results_by_part_mask[part_list[main_part]] = {}
     for mask_part in valid_parts:

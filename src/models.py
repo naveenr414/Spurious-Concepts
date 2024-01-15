@@ -17,7 +17,7 @@ def logits_to_index(logits):
     
     return torch.argmax(logits,dim=1) 
 
-def run_joint_model(model,x):
+def run_joint_model(model,x,detach=True):
     """Run a joint model and get the y_pred and c_pred
     
     Arguments: 
@@ -29,7 +29,8 @@ def run_joint_model(model,x):
     """
     
     output = model.forward(x)
-    output = [i.detach().cpu() for i in output]
+    if detach:
+        output = [i.detach().cpu() for i in output]
     y_pred = output[0]
     c_pred = torch.stack(output[1:]).squeeze(-1)
     
@@ -438,6 +439,8 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     
     # Set up the optimization process
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     has_input = fixed_image != None
 
     if fixed_image == None:
@@ -445,23 +448,22 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
     else:
         input_image = fixed_image[:,:,:,:]
         input_image.requires_grad = True
-    original_image = deepcopy(fixed_image) 
+    
+    original_image = fixed_image.clone()
     optimizer = torch.optim.Adam([input_image], lr=0.01)
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     num_steps = 300
     for _ in range(num_steps):
         optimizer.zero_grad()
-        _,c_pred = model_function(model,input_image.to(device))
-        _ = _.cpu()
-        c_pred = c_pred.cpu()
+        _,c_pred = model_function(model,input_image.to(device),detach=False)
+        _ = _.detach().cpu()
+        c_pred = c_pred
         if current_concept_val == 0:
             loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
         else:
             loss = c_pred.T[0,concept_num]
-
-        loss += lamb * torch.norm(input_image)
+        loss += lamb * torch.norm(input_image.to(device))
+        loss = loss.to(device)
         loss.backward()
         optimizer.step()
 
@@ -471,8 +473,59 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
                 input_image[0] = fix_image(input_image[0],original_image=original_image[0])
             else: 
                 input_image[0] = fix_image(input_image[0],original_image=None)
-            
+    original_image = None 
+    torch.cuda.empty_cache()
+
     return input_image
+
+def get_maximal_mask(model,model_function,concept_num,fix_image=lambda x: x,lamb=0,image_size=256,fixed_image=None,current_concept_val=-1):
+    """Given a model and a concept number, find a maximally activating image
+    
+    Arguments:
+        model: PyTorch model
+        model_function: Function to run the model, such as run_joint_model
+        concept_num: Integer denoting the number of a particular concept
+        fix_image: Function to transform the image, so solutions 
+        lamb: L2 Regularization term 
+        
+    Returns: PyTorch Tensor for an Image
+    """
+    
+    # Set up the optimization process
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    mask = torch.randn((1, 1, image_size,image_size), requires_grad=True)
+    mask.requires_grad = True 
+
+    if fixed_image == None:
+        input_image = torch.randn((1, 3, image_size,image_size), requires_grad=True)
+    else:
+        input_image = fixed_image[:,:,:,:]
+        input_image.requires_grad = True
+    
+    optimizer = torch.optim.Adam([mask], lr=0.01)
+
+    num_steps = 30
+    loss_list = []
+    for _ in range(num_steps):
+        optimizer.zero_grad()
+        mask = torch.round(mask)
+        _,c_pred = model_function(model,(input_image*mask).to(device),detach=False)
+        _ = _.detach().cpu()
+        c_pred = c_pred
+        if current_concept_val == 0:
+            loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
+        else:
+            loss = c_pred.T[0,concept_num]
+        loss += lamb * torch.norm(1-mask)
+        loss = loss.to(device)
+        loss.backward()
+        optimizer.step()
+        loss_list.append(loss.item())
+
+    return torch.round(torch.clip(mask,0,1))*input_image, loss_list
+
 
 def get_last_filter_activations(model,model_function,x,concept_num):
     """Given a model, find the activations for the FC layer for a certain concept

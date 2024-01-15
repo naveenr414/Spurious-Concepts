@@ -1,5 +1,6 @@
 ConceptBottleneck/CHEXPERT
 ConceptBottleneck/CUB/outputs
+ConceptBottleneck/CUB/wandb
 ConceptBottleneck/results
 ConceptBottleneck/other_results/
 ConceptBottleneck/runs
