@@ -83,6 +83,9 @@ def get_log_folder(args):
     rand_name = secrets.token_hex(4)
     save_data = vars(args)
 
+    if save_data["concept_restriction"] == None:
+        del save_data["concept_restriction"]
+
     if args.debugging:
         rand_name = 'debugging'
     elif args.load_model != 'none':
@@ -133,6 +136,7 @@ def main(args):
     pretrained = args.pretrained 
     one_batch = args.one_batch
     scheduler = args.scheduler
+    concept_restriction = args.concept_restriction
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -204,6 +208,11 @@ def main(args):
         else:
             one_batch = ""
 
+        if concept_restriction:
+            concept_restriction = "-concept_restriction {}".format(" ".join([str(i) for i in concept_restriction]))
+        else:
+            concept_restriction = ""
+
         cmd = (
             f"python3 experiments.py cub Joint --seed {seed} -ckpt 0 -log_dir {log_folder}/{model_type} "
             f"-e {epochs} -optimizer {optimizer} {one_batch} {pretrained} -use_aux -weighted_loss multiple -use_attr "
@@ -211,7 +220,7 @@ def main(args):
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 32 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step {scheduler_step} -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
-            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor}"
+            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor} {concept_restriction}"
         )
         
         run_command(cmd)
@@ -244,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument('--scheduler_step',default=30,type=int,help="How often to decrease the LR by a factor of 10")
     parser.add_argument('--one_batch',action='store_true',help="Should we only train on one batch?")
     parser.add_argument('--scheduler',type=str,default='none',help="'none' or 'cyclic'")
+    parser.add_argument('--concept_restriction',nargs='+',type=int,help="List of concept combinations to use when training")
 
     args = parser.parse_args()
     main(args)

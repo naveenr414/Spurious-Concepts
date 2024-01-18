@@ -55,6 +55,8 @@ if is_jupyter:
     scale_lr = 5
     model_type = 'joint'
     noisy = False 
+    weight_decay = 0.0004
+    lr = 0.05
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -70,6 +72,8 @@ else:
     parser.add_argument('--scale_factor', type=float, default=1.5, help='For the loss train variation, how much to scale loss by')
     parser.add_argument('--model_type', type=str, default='joint', help='"joint" or "independent" model')
     parser.add_argument('--noisy', dest='noisy',default=False,action='store_true')
+    parser.add_argument('--weight_decay', default=0.0004,type=float,help="What weight decay to use")
+    parser.add_argument('--lr', type=float, default=0.05, help='Learning Rate')
 
     args = parser.parse_args()
     num_objects = args.num_objects
@@ -83,6 +87,8 @@ else:
     scale_lr = args.scale_lr 
     model_type = args.model_type 
     noisy = args.noisy
+    weight_decay = args.weight_decay 
+    lr = args.lr 
 
 if noisy:
     dataset_name = "synthetic_object/synthetic_{}_noisy".format(num_objects)
@@ -98,6 +104,8 @@ parameters = {
     'num_middle_encoder': num_middle_encoder, 
     'debugging': False,
     'dataset': dataset_name,
+    'weight_decay': weight_decay, 
+    'lr': lr, 
 }
 
 if train_variation != 'none':

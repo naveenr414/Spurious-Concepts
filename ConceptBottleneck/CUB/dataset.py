@@ -20,7 +20,7 @@ class CUBDataset(Dataset):
     Returns a compatible Torch Dataset object customized for the CUB dataset
     """
 
-    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform=None,path_transform=lambda path: path):
+    def __init__(self, pkl_file_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform=None,path_transform=lambda path: path,concept_restriction=None):
         """
         Arguments:
         pkl_file_paths: list of full path to all the pkl data
@@ -30,13 +30,25 @@ class CUBDataset(Dataset):
         image_dir: default = 'images'. Will be append to the parent dir
         n_class_attr: number of classes to predict for each attribute. If 3, then make a separate class for not visible
         transform: whether to apply any special transformation. Default = None, i.e. use standard ImageNet preprocessing
-        """
+        """ 
         self.data = []
         self.is_train = any(["train" in path for path in pkl_file_paths])
 #         if not self.is_train:
 #             assert any([("test" in path) or ("val" in path) for path in pkl_file_paths])
         for file_path in pkl_file_paths:
             self.data.extend(pickle.load(open(file_path, 'rb')))
+        num_attributes = len(self.data[0]['attribute_label'])
+        if concept_restriction:
+            concepts_to_binary = []
+            for n in concept_restriction:
+                binary_str = bin(n)[2:]  # Remove the '0b' prefix
+                binary_list = [int(bit) for bit in binary_str]
+                binary_list = [0]*(num_attributes-len(binary_list))+binary_list
+                concepts_to_binary.append(binary_list)
+            print("Concepts to binary {}".format(concepts_to_binary))
+            self.data = [i for i in self.data if i['attribute_label'] in concepts_to_binary]
+            print("Dataset length is {}".format(len(self.data)))
+
         self.transform = transform
         self.use_attr = use_attr
         self.no_img = no_img
@@ -120,7 +132,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
     def __len__(self):
         return self.num_samples
 
-def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False,is_training=True,resize=True,one_batch=False):
+def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_class_attr=2, image_dir='images', resampling=False, resol=299,path_transform = None,experiment_name='',get_raw=False,is_training=True,resize=True,one_batch=False,concept_restriction=None):
     """
     Note: Inception needs (299,299,3) images with inputs scaled between -1 and 1
     Loads data with transformations applied, and upsample the minority class if there is class imbalance and weighted loss is not used
@@ -183,7 +195,7 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
     if path_transform == None:
         path_transform = lambda path: "../../../datasets/"+path
             
-    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform)
+    dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform,concept_restriction=concept_restriction)
             
     if is_training:
         drop_last = True

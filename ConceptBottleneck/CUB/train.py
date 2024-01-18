@@ -278,12 +278,13 @@ def train(model, args):
     resize = args.encoder_model=='inceptionv3' or 'dsprites' in args.data_dir or 'CUB' in args.data_dir or 'coco' in args.data_dir
 
     if args.ckpt and args.ckpt!='0': #retraining
+        print("Retraining!!!")
         train_loader = load_data([train_data_path, val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch,concept_restriction=args.concept_restriction)
         val_loader = None
     else:        
         train_loader = load_data([train_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
-                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
+                                 n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch,concept_restriction=args.concept_restriction)
         val_loader = load_data([val_data_path], args.use_attr, args.no_img, args.batch_size, args.uncertain_labels, image_dir=args.image_dir, \
                                  n_class_attr=args.n_class_attr, resampling=args.resampling,experiment_name=args.experiment_name,resize=resize,one_batch=args.one_batch)
 
@@ -563,6 +564,8 @@ def parse_arguments(experiment):
             help='Scale factor for the "loss" modification')
         parser.add_argument('-scheduler',type=str,default=1.5,
             help='Scheduler, such as cyclic or none')
+        parser.add_argument('-concept_restriction',nargs='+',type=int,help="List of concept combinations to use when training")
+
         args = parser.parse_args()
         args.three_class = (args.n_class_attr == 3)
         return (args,)
