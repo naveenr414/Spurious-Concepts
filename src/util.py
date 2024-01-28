@@ -511,7 +511,7 @@ def unnormalize_image(img):
     return unnormalized_image.transpose((1,2,0))
 
 def numpy_to_pil(img):
-    """Convert an image, img from a Numpy transformed image to PIl
+    """Convert an image, img from a Numpy transformed image to PIL
     
     Arguments:
         img: Image transformed by PyTorch

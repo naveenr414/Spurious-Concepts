@@ -462,7 +462,7 @@ def get_maximal_activation(model,model_function,concept_num,fix_image=lambda x: 
             loss = -c_pred.T[0, concept_num]  # Negate to maximize activation
         else:
             loss = c_pred.T[0,concept_num]
-        loss += lamb * torch.norm(input_image.to(device))
+        loss += lamb * torch.norm(input_image.to(device)-0.25)
         loss = loss.to(device)
         loss.backward()
         optimizer.step()

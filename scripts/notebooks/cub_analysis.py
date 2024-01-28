@@ -60,9 +60,9 @@ logging.info("Setting up dataset")
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
     encoder_model='inceptionv3'
-    seed = 43
+    seed = 44
     dataset_name = "CUB"
-    train_variation = "half"
+    train_variation = "loss"
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -196,6 +196,24 @@ results_by_part_mask = {}
 epsilon = 0.3
 test_data_num = 100
 
+main_part = valid_parts[0]
+mask_part = valid_parts[0]
+results_by_part_mask[part_list[main_part]] = {}
+
+# +
+main_attributes = parts_to_attribute[str(main_part)]
+mask_attributes = parts_to_attribute[str(mask_part)]
+test_images, test_y, test_c = None, None, None 
+gc.collect() 
+test_images, test_y, test_c = unroll_data(test_loader)
+
+valid_data_points = [i for i in range(len(test_pkl)) if main_part in locations_by_image_id[test_pkl[i]['id']] and mask_part in locations_by_image_id[test_pkl[i]['id']]]
+data_points = random.sample(valid_data_points,test_data_num)
+other_part_locations = [[get_part_location(data_point,new_part, locations_by_image_id, test_pkl) for new_part in valid_parts if new_part!=mask_part and new_part in locations_by_image_id[
+    test_pkl[data_point]['id']]] for data_point in data_points]
+
+# -
+
 for main_part in valid_parts:
     print("Main part is {}".format(main_part))
     results_by_part_mask[part_list[main_part]] = {}
@@ -211,7 +229,7 @@ for main_part in valid_parts:
         other_part_locations = [[get_part_location(data_point,new_part, locations_by_image_id, test_pkl) for new_part in valid_parts if new_part!=mask_part and new_part in locations_by_image_id[
             test_pkl[data_point]['id']]] for data_point in data_points]
 
-        masked_dataset = [mask_image_closest(test_images[data_points[idx]],get_part_location(data_points[idx],mask_part, locations_by_image_id, test_pkl),other_part_locations[idx],epsilon=epsilon) for idx in range(len(data_points))]
+        masked_dataset = [mask_image_closest(test_images[data_points[idx]],get_part_location(data_points[idx],mask_part, locations_by_image_id, test_pkl),other_part_locations[idx],epsilon=epsilon,color=torch.mean(test_images,dim=(0,2,3)).numpy().astype(np.float64)*2+0.5) for idx in range(len(data_points))]
         masked_dataset = torch.stack(masked_dataset)    
 
         final_predictions = None 
@@ -243,12 +261,14 @@ for i in results['part_mask']:
     for j in results['part_mask'][i]:
         results['part_mask'][i][j] = (float(results['part_mask'][i][j][0]),float(results['part_mask'][i][j][1]))
 
-save_name = "mask_epsilon_{}.json".format(seed)
-if train_variation != 'none':
-    save_name = "mask_epsilon_{}_{}.json".format(train_variation,seed)
+# +
+# save_name = "mask_epsilon_{}.json".format(seed)
+# if train_variation != 'none':
+#     save_name = "mask_epsilon_{}_{}.json".format(train_variation,seed)
+
+save_name = "mask_epsilon_mean_color_{}.json".format(seed)
+# -
 
 json.dump(results,open("../../results/cub/{}".format(save_name),"w"))
-
-
 
 
