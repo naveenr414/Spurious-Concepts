@@ -147,7 +147,6 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
     elif is_training:
         # DEBUG Add the transfomrs.Reszie(resol,resol) in 
         # So that images will all be 299x299
-        # TODO: Remove this when working with the synthetic dataset
 
 
         if resize:

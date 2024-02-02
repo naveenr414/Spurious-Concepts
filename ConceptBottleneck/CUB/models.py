@@ -43,7 +43,6 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
                             n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                             three_class=(n_class_attr == 3))
     elif encoder_model == 'mlp':
-        # TODO: Make this more general 
         model1 = MLP(299**2*3,n_attributes,expand_dim_encoder,encoder_model=True,num_middle_encoder=num_middle_encoder)
     else:
         raise Exception("{} not found".format(encoder_model))

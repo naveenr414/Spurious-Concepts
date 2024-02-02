@@ -130,7 +130,6 @@ def run_inference(retrain_path, model_types=[], all_lambdas=[], feature_group=Fa
         if 'adversarial' in retrain_path:
             command += ' -image_dir CUB_adversarial/CUB_fixed/test/'
         subprocess.run([command])
-    #TODO: write test inference results to a separate folder
 
 
 if __name__ == "__main__":

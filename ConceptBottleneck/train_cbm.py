@@ -61,7 +61,6 @@ def delete_same_dict(save_data):
         if json_file == save_data:
             files_to_delete.append(file_name.split("/")[-1].replace(".json",""))
 
-    # TODO: For debugging 
     print("Files to delete are {}".format(files_to_delete))
     
     for file_name in files_to_delete:
@@ -197,7 +196,6 @@ def main(args):
         subprocess.check_output([cmd3], shell=True,stderr=subprocess.STDOUT)
 
     elif model_type == "joint":
-        # TODO: Add back in -pretrained
         if pretrained: 
             pretrained = " -pretrained"
         else:

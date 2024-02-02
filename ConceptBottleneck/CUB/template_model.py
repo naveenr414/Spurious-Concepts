@@ -421,7 +421,6 @@ class SimpleConvNet(nn.Module):
 
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
-        # TODO: Change this so it's more general
         # Essentially, for CUB, it uses a 299x299 dataset whereas with 
         # The other one, we use a 256x256
         # When we run final experiments, change everything to be 299x299

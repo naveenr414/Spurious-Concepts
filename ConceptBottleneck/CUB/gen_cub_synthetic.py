@@ -232,7 +232,6 @@ if __name__ == '__main__':
             img_test.save(full_test_path)
 
     # Save fixed class/image metadata
-    # TODO: Should probably record individual places images too
     fixed_dir = os.path.join(args.out_dir, args.fixed_dirname)
     with open(os.path.join(fixed_dir, 'train_places.json'), 'w') as f:
         json.dump(s2p_train, f, sort_keys=True, indent=4)
