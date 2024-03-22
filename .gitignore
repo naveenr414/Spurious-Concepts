@@ -11,3 +11,10 @@ scripts/.ipynb_checkpoints
 scripts/runs
 models/
 src/__pycache__/
+results_backup
+cem/results
+cem/lightning_logs
+cem/cem/data/CUB200
+cem/wandb
+cem/models
+cem/media

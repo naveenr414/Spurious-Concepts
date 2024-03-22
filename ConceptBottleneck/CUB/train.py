@@ -83,6 +83,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
             attr_labels_var = attr_labels.float().to(device)
         inputs_var = inputs.to(device)
         labels_var = labels.to(device)
+        inputs_var.requires_grad = True
 
         loss_type = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
         
@@ -183,6 +184,35 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
             optimizer.zero_grad()
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+            if args.train_variation == "adversarial":
+                def fgsm_attack(data, epsilon, data_grad):
+                    sign_data_grad = data_grad.sign()
+                    perturbed_data = data + epsilon * sign_data_grad
+                    perturbed_data = torch.clamp(perturbed_data, 0, 1)
+                    return perturbed_data
+                
+                data_grad = inputs_var.grad.data 
+                perturbed_data = fgsm_attack(inputs_var,0.01,data_grad)
+                outputs, aux_outputs = model(perturbed_data,binary=False)
+                losses = []
+                out_start = 0
+                
+                if not args.bottleneck: #loss main is for the main task label (always the first output)
+                    loss_main = 1.0 * criterion(outputs[0], labels_var) + 0.4 * criterion(aux_outputs[0], labels_var)
+                    losses.append(loss_main)
+                    out_start = 1
+                if attr_criterion is not None and args.attr_loss_weight > 0: #X -> A, cotraining, end2end
+                    for i in range(len(attr_criterion)):
+                        losses.append(args.attr_loss_weight * (1.0 * attr_criterion[i](outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i]) \
+                                                                + 0.4 * attr_criterion[i](aux_outputs[i+out_start].squeeze().type(loss_type), attr_labels_var[:, i])))
+
+                total_loss = losses[0] + sum(losses[1:])
+                if args.normalize_loss:
+                    total_loss = total_loss / (1 + args.attr_loss_weight * args.n_attributes)
+                total_loss *= 0.25
+                total_loss.backward()
+
             optimizer.step()
 
         if args.one_batch:
