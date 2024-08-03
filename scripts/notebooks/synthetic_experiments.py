@@ -33,6 +33,7 @@ from copy import copy
 import itertools
 import json
 import argparse 
+import resource
 
 from src.images import *
 from src.util import *
@@ -44,7 +45,7 @@ from src.plot import *
 # +
 is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
-    num_objects = 2
+    num_objects = 1
     encoder_model='small7'
     seed = 42
     epochs = 50
@@ -53,7 +54,7 @@ if is_jupyter:
     train_variation = 'none'
     scale_factor = 1.5
     scale_lr = 5
-    model_type = 'joint'
+    model_type = 'cem'
     noisy = False 
     weight_decay = 0.0004
     lr = 0.05
@@ -70,6 +71,8 @@ else:
     parser.add_argument('--train_variation', type=str, default='none', help='Either "none", "loss", or "half"')
     parser.add_argument('--scale_lr', type=int, default=5, help='For the half train variation, how much to decrease LR by')
     parser.add_argument('--scale_factor', type=float, default=1.5, help='For the loss train variation, how much to scale loss by')
+    parser.add_argument('--adversarial_weight', type=float, default=0.25, help='For the adversarial, what is the weight')
+    parser.add_argument('--adversarial_epsilon', type=float, default=0.01, help='For the adversarial, what is the level of epsilon')
     parser.add_argument('--model_type', type=str, default='joint', help='"joint" or "independent" model')
     parser.add_argument('--noisy', dest='noisy',default=False,action='store_true')
     parser.add_argument('--weight_decay', default=0.0004,type=float,help="What weight decay to use")
@@ -89,6 +92,8 @@ else:
     noisy = args.noisy
     weight_decay = args.weight_decay 
     lr = args.lr 
+    adversarial_weight = args.adversarial_weight 
+    adversarial_epsilon = args.adversarial_epsilon 
 
 if noisy:
     dataset_name = "synthetic_object/synthetic_{}_noisy".format(num_objects)
@@ -107,6 +112,7 @@ parameters = {
     'weight_decay': weight_decay, 
     'lr': lr, 
 }
+parameters['model_type'] = model_type 
 
 if train_variation != 'none':
     parameters['train_variation'] = train_variation 
@@ -115,12 +121,17 @@ if train_variation != 'none':
         parameters['scale_lr'] = scale_lr 
     elif train_variation == 'loss':
         parameters['scale_factor'] = scale_factor 
+    elif train_variation == 'adversarial':
+        parameters['adversarial_weight'] = adversarial_weight
+        parameters['adversarial_epsilon'] = adversarial_epsilon
+if model_type == "cem" or model_type == "probcbm":
+    parameters = {'model_type': model_type, 'dataset': 'synthetic_{}'.format(num_objects), 'seed': seed}
 
-parameters['model_type'] = model_type 
 
 print(parameters)
 torch.cuda.set_per_process_memory_fraction(0.5)
-
+resource.setrlimit(resource.RLIMIT_AS, (30 * 1024 * 1024 * 1024, -1))
+torch.set_num_threads(1)
 
 # -
 
@@ -147,6 +158,11 @@ else:
     joint_model = joint_model.to(device)
 
 run_model_function = run_joint_model if model_type == 'joint' else run_independent_model
+
+if model_type == "cem":
+    run_model_function = run_cem_model
+elif model_type == "probcbm":
+    run_model_function = run_probcbm_model
 
 if encoder_model == 'mlp':
     for i in range(len(joint_model.first_model.linear_layers)):
@@ -182,7 +198,33 @@ def numpy_to_pil(img):
     return im
 
 
-joint_model.to(device)
+if is_jupyter:
+    activation_values = []
+    trials = 5
+    lamb_values = [0,1,2,4,8,12,16]
+
+    for lamb in lamb_values:
+        print(lamb)
+        val_for_concept = 0
+        for concept_num in range(num_objects*2):
+            for _ in range(trials):
+                data_point = random.randint(0,len(test_images)-1)
+                input_image = deepcopy(test_images[data_point:data_point+1])
+                current_concept_val = test_c[data_point][concept_num]
+
+                ret_image = get_maximal_activation(joint_model,run_model_function,concept_num,
+                                                get_valid_image_function(concept_num,num_objects,epsilon=32),fixed_image=input_image,current_concept_val=current_concept_val,lamb=lamb).to(device)
+                predicted_concept = torch.nn.Sigmoid()(run_model_function(joint_model,ret_image)[1].detach().cpu())[concept_num][0].detach().numpy()
+
+                val_for_concept += abs(predicted_concept-current_concept_val.detach().numpy())/(trials*num_objects*2)
+        
+            if concept_num == 0:
+                ret_image = ret_image.detach()[0].cpu().numpy()
+                im = numpy_to_pil(ret_image)
+                im.save("../../results/synthetic/l2_norm/example_{}_{}.png".format(lamb,seed)) 
+        print(float(val_for_concept))
+        activation_values.append(float(val_for_concept))
+    json.dump({'activation_values': activation_values, 'lambda': lamb_values, 'parameters': parameters},open("../../results/synthetic/l2_norm/results_{}.json".format(seed),'w'))
 
 # +
 activation_values = []

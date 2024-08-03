@@ -37,7 +37,7 @@ def subsample_transform(sample):
         sample = np.array(sample)
     return sample[selected_concepts]
 
-def generate_data_loaders_synthetic():
+def generate_data_loaders_synthetic(experiment_name):
     """Generate the train and validation dataloaders for the birds dataset
     
     Parameters: None
@@ -47,7 +47,7 @@ def generate_data_loaders_synthetic():
         valid_dl: A PyTorch dataloader with data, output, and concepts
     """
 
-    cub_location = '../../../datasets/synthetic_object/synthetic_2'.format(suffix)
+    cub_location = '../../../datasets/synthetic_object/{}'.format(experiment_name)
     train_data_path = cub_location+'/preprocessed/train.pkl'
     valid_data_path = cub_location+'/preprocessed/val.pkl'
     test_data_path = cub_location+'/preprocessed/test.pkl'
@@ -142,9 +142,20 @@ if __name__ == "__main__":
     elif suffix == '_model_responsiveness':
         existing_weights = 'resnet_model_responsiveness.pt'
     
-    train_dl, valid_dl, test_dl = generate_data_loaders_synthetic()
-    n_concepts = 4
+    train_dl, valid_dl, test_dl = generate_data_loaders_synthetic(experiment_name)
     n_tasks = 2
+
+    if experiment_name == "synthetic_1":
+        n_concepts = 2
+    elif experiment_name == "synthetic_2":
+        n_concepts = 4
+    elif experiment_name == "synthetic_4":
+        n_concepts=8
+    elif experiment_name == "synthetic_8":
+        n_concepts=16
+    else:
+        raise Exception("{} not found".format(experiment_name))
+    
     imbalance = None 
     extractor_arch = "resnet34"
 

@@ -20,8 +20,20 @@ seed=$1
 # echo "Independent Models"
 # python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --model_type independent
 
-python synthetic_experiments.py --num_objects 2 --encoder_model small3 --epochs 50 --seed $seed --train_variation adversarial
-python synthetic_experiments.py --num_objects 2 --encoder_model small4 --epochs 50 --seed $seed --train_variation adversarial
-python synthetic_experiments.py --num_objects 2 --encoder_model small5 --epochs 50 --seed $seed --train_variation adversarial
-python synthetic_experiments.py --num_objects 2 --encoder_model small6 --epochs 50 --seed $seed --train_variation adversarial
-python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial
+echo "Adversarial training" 
+
+# python synthetic_experiments.py --num_objects 2 --encoder_model small3 --epochs 50 --seed $seed --train_variation adversarial
+# python synthetic_experiments.py --num_objects 2 --encoder_model small4 --epochs 50 --seed $seed --train_variation adversarial
+# python synthetic_experiments.py --num_objects 2 --encoder_model small5 --epochs 50 --seed $seed --train_variation adversarial
+# python synthetic_experiments.py --num_objects 2 --encoder_model small6 --epochs 50 --seed $seed --train_variation adversarial
+# python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial
+
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_weight 0.1
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_weight 0.25
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_weight 0.5
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_weight 1
+
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_epsilon 0.01
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_epsilon 0.05
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_epsilon 0.1
+python synthetic_experiments.py --num_objects 2 --encoder_model small7 --epochs 50 --seed $seed --train_variation adversarial --adversarial_epsilon 0.25

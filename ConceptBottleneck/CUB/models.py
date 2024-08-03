@@ -1,4 +1,4 @@
-from CUB.template_model import MLP, inception_v3, End2EndModel, SimpleConvNetN, SimpleConvNetEqualParameter
+from CUB.template_model import MLP, inception_v3, End2EndModel, SimpleConvNetN, SimpleConvNetEqualParameter, EqualReceptiveFieldN
 
 
 # Independent & Sequential Model
@@ -40,6 +40,14 @@ def ModelXtoCtoY(n_class_attr, pretrained, freeze, num_classes, use_aux, n_attri
     elif 'small' in encoder_model:
         num_layers = int(encoder_model[-1])
         model1 = SimpleConvNetN(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
+                            n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                            three_class=(n_class_attr == 3))
+    elif 'receptive_field' in encoder_model:
+        num_layers = int(encoder_model[-1])
+        model1 = SimpleConvNetN(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
+                            n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
+                            three_class=(n_class_attr == 3))
+        model1 = EqualReceptiveFieldN(num_classes=num_classes,num_layers=num_layers, aux_logits=use_aux,
                             n_attributes=n_attributes, bottleneck=True, expand_dim=expand_dim,
                             three_class=(n_class_attr == 3))
     elif encoder_model == 'mlp':

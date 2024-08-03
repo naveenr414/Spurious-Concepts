@@ -131,6 +131,8 @@ def main(args):
     train_variation = args.train_variation
     scale_lr = args.scale_lr
     scale_factor = args.scale_factor
+    adversarial_epsilon = args.adversarial_epsilon
+    adversarial_weight = args.adversarial_weight 
     scheduler_step = args.scheduler_step
     pretrained = args.pretrained 
     one_batch = args.one_batch
@@ -218,7 +220,8 @@ def main(args):
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 32 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step {scheduler_step} -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
-            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor} {concept_restriction}"
+            f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor} "
+            f"-adversarial_epsilon {adversarial_epsilon} -adversarial_weight {adversarial_weight} {concept_restriction}"
         )
         
         run_command(cmd)
@@ -248,6 +251,8 @@ if __name__ == "__main__":
     parser.add_argument('--pretrained', action='store_true')
     parser.add_argument('--scale_lr',default=5,type=int)
     parser.add_argument('--scale_factor',default=1.5,type=float)
+    parser.add_argument('--adversarial_epsilon',default=0.01,type=float)
+    parser.add_argument('--adversarial_weight',default=0.25,type=float)
     parser.add_argument('--scheduler_step',default=30,type=int,help="How often to decrease the LR by a factor of 10")
     parser.add_argument('--one_batch',action='store_true',help="Should we only train on one batch?")
     parser.add_argument('--scheduler',type=str,default='none',help="'none' or 'cyclic'")

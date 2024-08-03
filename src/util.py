@@ -270,7 +270,7 @@ def add_gaussian_noise(image, std_dev=25):
 
     return noisy_image
 
-def get_data(num_objects,encoder_model="small3",dataset_name=""):
+def get_data(num_objects,encoder_model="small3",dataset_name="",get_label_free=False):
     """Load the Synthetic Dataset for a given number of objects
 
     Arguments:
@@ -299,9 +299,9 @@ def get_data(num_objects,encoder_model="small3",dataset_name=""):
     val_data_path = train_data_path.replace('train.pkl', 'val.pkl')
     test_data_path = train_data_path.replace('train.pkl', 'test.pkl')
     train_loader = load_data([train_data_path], use_attr, no_img, batch_size, uncertain_labels, image_dir=image_dir, 
-                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: dataset_directory+"/"+path, is_training=False,resize=resize)
-    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize)
-    test_loader = load_data([test_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize)
+                         n_class_attr=num_class_attr, resampling=resampling, path_transform=lambda path: dataset_directory+"/"+path, is_training=False,resize=resize,get_label_free=get_label_free)
+    val_loader = load_data([val_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize,get_label_free=get_label_free)
+    test_loader = load_data([test_data_path], use_attr, no_img=False, batch_size=64, image_dir=image_dir, n_class_attr=num_class_attr, path_transform=lambda path: dataset_directory+"/"+path,resize=resize,get_label_free=get_label_free)
 
     train_pkl = pickle.load(open(train_data_path,"rb"))
     val_pkl = pickle.load(open(val_data_path,"rb"))
@@ -510,16 +510,13 @@ def unnormalize_image(img):
 
     return unnormalized_image.transpose((1,2,0))
 
-def numpy_to_pil(img):
+def numpy_to_pil(img,mean=np.array([0.5, 0.5, 0.5]),std=np.array([2, 2, 2])):
     """Convert an image, img from a Numpy transformed image to PIL
     
     Arguments:
         img: Image transformed by PyTorch
     
     Returns: PIL image"""
-
-    mean = np.array([0.5, 0.5, 0.5])
-    std = np.array([2, 2, 2])
 
     unnormalized_image = img * std[:, np.newaxis, np.newaxis] + mean[:, np.newaxis, np.newaxis]
     unnormalized_image = unnormalized_image*255 
@@ -560,6 +557,30 @@ def convert_point(x,y,width,height,new_width=299,new_height=299):
 
     return int(x*new_width/width),int(y*new_height/height)
 
+def convert_point_center_crop(x,y,width,height,new_width=224,new_height=224):
+    """Given a point (x,y) in some image with width x height, 
+        Convert the new location in an image with new_width x new_height
+        
+    Arguments:
+        x: Integer
+        y: Integer
+        width: Integer
+        Height: Integer
+        new_width: Integer, size of the new image
+        new_height: Integer, size of the new image
+
+    Returns: (x,y), two integers"""
+
+    center = width//2, height//2
+    x_prime = x-center[0] + new_width//2
+    x_prime = min(max(x_prime,0),new_width)
+
+    y_prime = y-center[1] + new_height//2
+    y_prime = min(max(y_prime,0),new_height)
+
+    return int(x_prime), int(y_prime)
+
+
 def get_part_location(data_point, attribute_num, locations_by_image, val_pkl):
     """Get the new location of a body part for a specific CUB image
 
@@ -577,6 +598,25 @@ def get_part_location(data_point, attribute_num, locations_by_image, val_pkl):
     new_point = convert_point(x,y,width,height)
 
     return new_point
+
+def get_part_location_center_crop(data_point, attribute_num, locations_by_image, val_pkl):
+    """Get the new location of a body part for a specific CUB image
+
+    Arguments:
+        data_point: Integer, which data point to look at
+        attribute_num: Integer, which attribute to look at 
+        locations_by_image: Dictionary of part locations 
+        val_pkl: List of dictionaries with metadata for images
+
+    Returns: Tuple with the new (x,y) for that particular attribute
+    """
+
+    width, height = get_image_dimensions(dataset_directory+"/"+ val_pkl[data_point]['img_path'])
+    x,y = locations_by_image[val_pkl[data_point]['id']][attribute_num] 
+    new_point = convert_point_center_crop(x,y,width,height)
+
+    return new_point
+
 
 def get_new_x_y(bbox,idx,val_pkl):
     """Get the new bounding box for an image in the Coco dataset
@@ -600,7 +640,7 @@ def get_new_x_y(bbox,idx,val_pkl):
     return [new_x,new_y,new_width,new_height]
 
 
-def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.1):
+def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.1, mean=np.array([0.5,0.5,0.5]),std=np.array([2,2,2]),width=299,height=299):
     """Given a PyTorch array img, fill in black at points closest to the attribute
     
     Arguments: 
@@ -613,7 +653,7 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.
     Returns: New PyTorch Tensor"""
 
     # Due to normalizing of image
-    color = (np.array(color)-0.5)/2
+    color = (np.array(color)-mean)/std
 
     epsilon_scaled = round(epsilon*img.shape[1])
 
@@ -621,7 +661,7 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.
         for y in range(location[1]-epsilon_scaled,location[1]+epsilon_scaled+1):
             dist = (x-location[0])**2 + (y-location[1])**2
             if dist < epsilon_scaled**2:
-                if x<0 or y<0 or x>=299 or y >=299:
+                if x<0 or y<0 or x>=width or y >=height:
                     continue 
                 for (x_,y_) in other_locations:
                     dist_ = (x_-x)**2 + (y_-y)**2
@@ -632,7 +672,7 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.
                         img[k,y,x] = color[k]
     return img
 
-def mask_bbox(img, bbox_list, color=(0,0,0)):
+def mask_bbox(img, bbox_list, color=(0,0,0), mean=np.array([0.5,0.5,0.5]),std=np.array([2,2,2])):
     """Given a PyTorch array img, fill in black at points within each bounding box
     
     Arguments: 
@@ -642,7 +682,7 @@ def mask_bbox(img, bbox_list, color=(0,0,0)):
         
     Returns: New PyTorch Tensor"""
 
-    color = (np.array(color)-0.5)/2
+    color = (np.array(color)-mean)/std
     
     for bbox in bbox_list:
         tiled_tensor = torch.Tensor(color).tile((bbox[3],bbox[2])).view(3, bbox[3], bbox[2])
@@ -650,7 +690,7 @@ def mask_bbox(img, bbox_list, color=(0,0,0)):
     return img 
  
 
-def mask_image_location(img, location, color=(0,0,0), epsilon=10):
+def mask_image_location(img, location, color=(0,0,0), epsilon=10, mean=np.array([0.5,0.5,0.5]), std=np.array([2,2,2])):
     """Given a PyTorch array img, fill in a circle centered at location with color
     
     Arguments: 
@@ -663,7 +703,7 @@ def mask_image_location(img, location, color=(0,0,0), epsilon=10):
 
     # Due to normalizing 
     # Due to normalizing of image
-    color = (np.array(color)-0.5)/2
+    color = (np.array(color)-mean)/std
 
     epsilon_scaled = round(epsilon*img.shape[1])
 
@@ -677,7 +717,7 @@ def mask_image_location(img, location, color=(0,0,0), epsilon=10):
                     img[k,y,x] = color[k]
     return img
 
-def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images,color=(0,0,0),epsilon=10):
+def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images,color=(0,0,0),epsilon=10, mean=np.array([0.5,0.5,0.5]), std=np.array([2,2,2])):
     """Create a new image with a specific part masked out by the color
         within some radius epsilon  
     
@@ -696,7 +736,7 @@ def mask_part(data_point, attribute_num, locations_by_image, val_pkl, val_images
     part_location = get_part_location(data_point,attribute_num, locations_by_image, val_pkl)
     img_val = deepcopy(val_images[data_point])
 
-    return mask_image_location(img_val,part_location,epsilon=epsilon,color=color) 
+    return mask_image_location(img_val,part_location,epsilon=epsilon,color=color,mean=mean,std=std) 
 
 def visualize_part(data_point, part_num, epsilon, locations_by_image, val_pkl, val_images):
     """Visualize the masking algorithm for some specific data point 

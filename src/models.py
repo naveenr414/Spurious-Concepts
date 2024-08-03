@@ -36,6 +36,39 @@ def run_joint_model(model,x,detach=True):
     
     return y_pred, c_pred
 
+
+def run_probcbm_model(model,x,detach=True):
+    """Run a ProbCBM model and get the y_pred and c_pred
+    
+    Arguments: 
+        model: A PyTorch joint model
+        x: Numpy array that we run through the model
+
+    Returns:
+        Two Torch Tensors: y_pred and c_pred
+    """
+    
+    orig_dim = len(x) 
+    if len(x) < 3:
+        if len(x) == 1:
+            orig_dim = 1 
+            x = torch.stack([x[0],x[0],x[0]])
+        elif len(x) == 2:
+            orig_dim = 2
+            x = torch.stack([x[0],x[1],x[0]])
+
+    output = model._forward(x)
+    if detach:
+        output = [i.detach().cpu() for i in output]
+    y_pred = output[2]
+    c_pred = output[0]
+
+    if orig_dim != len(x):
+        y_pred = y_pred[:orig_dim]
+        c_pred = c_pred[:orig_dim]
+    
+    return y_pred, c_pred.T
+
 def load_cem_model(config,result_dir):
     """Load a CEM model from a config file
     
@@ -63,7 +96,7 @@ def load_cem_model(config,result_dir):
 
     
 
-def run_cem_model(model,x):
+def run_cem_model(model,x,detach=True):
     """Run a CEM model and get the y_pred and c_pred
     
     Arguments:
@@ -77,6 +110,10 @@ def run_cem_model(model,x):
     output = model.forward(x)
     y_pred = output[2]
     c_pred = output[1]
+
+    if detach:
+        y_pred = y_pred.detach().cpu()
+        c_pred = c_pred.detach().cpu()
     
     return y_pred, c_pred.T
 

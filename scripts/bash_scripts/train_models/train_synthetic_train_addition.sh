@@ -20,8 +20,20 @@ seed=$1
 # echo "Independent Models"
 # python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed -model_type independent
 
-python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small3 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
-python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small4 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
-python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small5 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
-python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small6 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
-python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+# echo "Adversarial Model"
+# python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small3 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+# python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small4 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+# python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small5 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+# python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small6 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+# python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial 
+
+echo "Adversarial Ablation"
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_weight 0.1
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_weight 0.25
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_weight 0.5
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_weight 1
+
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_epsilon 0.01
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_epsilon 0.05
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_epsilon 0.1
+python train_cbm.py -dataset synthetic_object/synthetic_2 --encoder_model small7 -epochs 50 -num_attributes 4 -num_classes 2 -seed $seed --train_variation adversarial --adversarial_epsilon 0.25

@@ -186,6 +186,8 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             if args.train_variation == "adversarial":
+                adversarial_epsilon = args.adversarial_epsilon #= 0.01
+                adversarial_weight = args.adversarial_weight #= 0.25 
                 def fgsm_attack(data, epsilon, data_grad):
                     sign_data_grad = data_grad.sign()
                     perturbed_data = data + epsilon * sign_data_grad
@@ -193,7 +195,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
                     return perturbed_data
                 
                 data_grad = inputs_var.grad.data 
-                perturbed_data = fgsm_attack(inputs_var,0.01,data_grad)
+                perturbed_data = fgsm_attack(inputs_var,adversarial_epsilon,data_grad)
                 outputs, aux_outputs = model(perturbed_data,binary=False)
                 losses = []
                 out_start = 0
@@ -210,7 +212,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
                 total_loss = losses[0] + sum(losses[1:])
                 if args.normalize_loss:
                     total_loss = total_loss / (1 + args.attr_loss_weight * args.n_attributes)
-                total_loss *= 0.25
+                total_loss *= adversarial_weight
                 total_loss.backward()
 
             optimizer.step()
@@ -592,6 +594,11 @@ def parse_arguments(experiment):
             help='How much to scale LR down by during "half" modification')
         parser.add_argument('-scale_factor',type=float,default=1.5,
             help='Scale factor for the "loss" modification')
+        parser.add_argument('-adversarial_epsilon',type=float,default=0.01,
+            help='Epsilon used for FGSM')
+        parser.add_argument('-adversarial_weight',type=float,default=1.5,
+            help='Weight placed on the adversarial weight')
+
         parser.add_argument('-scheduler',type=str,default=1.5,
             help='Scheduler, such as cyclic or none')
         parser.add_argument('-concept_restriction',nargs='+',type=int,help="List of concept combinations to use when training")

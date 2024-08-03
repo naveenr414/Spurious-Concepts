@@ -329,6 +329,97 @@ class SimpleConvNetN(nn.Module):
         else:
             return out
 
+class EqualReceptiveFieldN(nn.Module):
+    def __init__(self, num_classes, num_layers,aux_logits=True, transform_input=False, 
+                 n_attributes=0, bottleneck=False, expand_dim=0, 
+                 three_class=False, connect_CY=False):
+        super(EqualReceptiveFieldN, self).__init__()
+        self.conv_layers = nn.ModuleList()
+        channels = 512
+        for i in range(num_layers):
+            in_channels = 3 if i == 0 else 2**(i+5)
+            out_channels = 2**(i+6) 
+            in_channels = min(in_channels,512)
+            out_channels = min(out_channels,512)
+
+            if i == 0:
+                conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size=15-2*(num_layers-1), stride=1, padding=1)
+            else:
+                conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            self.conv_layers.append(conv_layer)
+
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.input_size = 256
+
+        dataset = "synthetic"
+
+        if n_attributes == 112:
+            dataset = "cub"
+        elif n_attributes == 15:
+            dataset = "coco"
+
+        # Calculate the output size of the last conv layer before the linear layer
+        first_num = min(2**9,2**(num_layers+5))
+        
+        if dataset == "cub" or dataset == "coco":
+            second_num = 37//(2**(num_layers-3))
+        elif dataset == "synthetic":
+            if num_layers == 7:
+                second_num = 32//(2**(num_layers-3))
+            else:
+                second_num = 31//(2**(num_layers-3))
+        else:
+            second_num = 32//(2**(num_layers-3))
+        self.conv_output_size = first_num*second_num**2
+
+        self.all_fc = nn.ModuleList()
+        
+        self.aux_logits = aux_logits
+        self.transform_input = transform_input
+        self.n_attributes = n_attributes
+        self.bottleneck = bottleneck
+        if aux_logits:
+            self.AuxLogits = InceptionAux(768, num_classes, n_attributes=self.n_attributes, bottleneck=bottleneck, \
+                                                expand_dim=expand_dim, three_class=three_class, connect_CY=connect_CY)
+
+        if connect_CY:
+            self.cy_fc = FC(n_attributes, num_classes, expand_dim)
+        else:
+            self.cy_fc = None
+
+            
+        if self.n_attributes > 0:
+            if not bottleneck: #multitasking
+                self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+            for i in range(self.n_attributes):
+                self.all_fc.append(FC(self.conv_output_size, 1, expand_dim))
+        else:
+            self.all_fc.append(FC(self.conv_output_size, num_classes, expand_dim))
+
+    def forward(self, x,binary=False):
+        for conv_layer in self.conv_layers:
+            x = self.pool(torch.relu(conv_layer(x)))        
+        self.last_conv_output = x
+
+        # Flatten the tensor before passing it through the fully connected layers
+        x = x.view(-1, self.conv_output_size)
+        self.output_before_fc = x
+
+        out = []
+        for fc in self.all_fc:
+            out.append(fc(x))
+        if self.n_attributes > 0 and not self.bottleneck and self.cy_fc is not None:
+            attr_preds = torch.cat(out[1:], dim=1)
+            if binary:
+                attr_preds = torch.round(attr_preds).float()
+            
+            out[0] += self.cy_fc(attr_preds)
+        if self.training and self.aux_logits:
+            return out, out
+        else:
+            return out
+
+
 class SimpleConvNetEqualParameter(nn.Module):
     def __init__(self, num_classes, num_layers,aux_logits=True, transform_input=False, 
                  n_attributes=0, bottleneck=False, expand_dim=0, 

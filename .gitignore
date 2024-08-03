@@ -18,3 +18,5 @@ cem/cem/data/CUB200
 cem/wandb
 cem/models
 cem/media
+label-free/
+buidl/
