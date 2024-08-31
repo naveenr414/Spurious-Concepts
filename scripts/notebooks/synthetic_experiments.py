@@ -77,6 +77,7 @@ else:
     parser.add_argument('--noisy', dest='noisy',default=False,action='store_true')
     parser.add_argument('--weight_decay', default=0.0004,type=float,help="What weight decay to use")
     parser.add_argument('--lr', type=float, default=0.05, help='Learning Rate')
+    parser.add_argument('--use_residual', dest='use_residual',default=False,action='store_true')
 
     args = parser.parse_args()
     num_objects = args.num_objects
@@ -94,6 +95,7 @@ else:
     lr = args.lr 
     adversarial_weight = args.adversarial_weight 
     adversarial_epsilon = args.adversarial_epsilon 
+    use_residual = args.use_residual
 
 if noisy:
     dataset_name = "synthetic_object/synthetic_{}_noisy".format(num_objects)
@@ -111,6 +113,7 @@ parameters = {
     'dataset': dataset_name,
     'weight_decay': weight_decay, 
     'lr': lr, 
+    'use_residual': use_residual,
 }
 parameters['model_type'] = model_type 
 

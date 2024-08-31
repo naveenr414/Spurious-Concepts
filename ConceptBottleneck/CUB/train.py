@@ -142,6 +142,9 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter, concept_acc_meter
             concept_acc_meter.update(acc.data.cpu().numpy(), inputs.size(0))
         else:
             concept_predictions = torch.nn.Sigmoid()(torch.stack(outputs[1:])[:,:,0].T)
+            if args.use_residual:
+                concept_predictions = concept_predictions[:,:-1]
+            
             concept_accuracy = binary_accuracy(concept_predictions,attr_labels)
             auroc_metric = AUROC(pos_label=1)
             flatten_predictions = torch.flatten(concept_predictions).detach().cpu()
@@ -461,7 +464,7 @@ def train_X_to_C_to_y(args):
                          num_classes=args.num_classes, use_aux=args.use_aux, n_attributes=args.n_attributes,
                          expand_dim=args.expand_dim, use_relu=args.use_relu, use_sigmoid=args.use_sigmoid,
                         use_unknown=args.use_unknown,encoder_model=args.encoder_model,expand_dim_encoder=args.expand_dim_encoder, 
-                        num_middle_encoder=args.num_middle_encoder)
+                        num_middle_encoder=args.num_middle_encoder,use_residual=args.use_residual)
     # Load the model 
     num_parameters = sum(p.numel() for p in model.parameters())
 
@@ -533,6 +536,8 @@ def parse_arguments(experiment):
         parser.add_argument('-weight_decay', type=float, default=5e-5, help='weight decay for optimizer')
         parser.add_argument('-pretrained', '-p', action='store_true',
                             help='whether to load pretrained model & just fine-tune')
+        parser.add_argument('-use_residual', action='store_true',
+                            help='whether to use a resiudal layer')
         parser.add_argument('-one_batch', action='store_true',
                             help='whether to only train on one batch; a form of debugging')
         parser.add_argument('-freeze', action='store_true', help='whether to freeze the bottom part of inception network')

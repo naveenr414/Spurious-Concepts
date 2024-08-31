@@ -7,7 +7,7 @@ import glob
 import json 
 import shutil
 
-dataset_folder = "../../../datasets"
+dataset_folder = "datasets"
 
 def run_command(command):
     """Run some command, print it's output, and any errors it produces
@@ -138,6 +138,7 @@ def main(args):
     one_batch = args.one_batch
     scheduler = args.scheduler
     concept_restriction = args.concept_restriction
+    use_residual = args.use_residual
 
     os.makedirs(f"results/{dataset}", exist_ok=True)
 
@@ -208,6 +209,11 @@ def main(args):
         else:
             one_batch = ""
 
+        if use_residual:
+            residual = " -use_residual"
+        else:
+            residual = ""
+
         if concept_restriction:
             concept_restriction = "-concept_restriction {}".format(" ".join([str(i) for i in concept_restriction]))
         else:
@@ -221,7 +227,7 @@ def main(args):
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step {scheduler_step} -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "
             f"-load_model {load_model} -train_variation {train_variation} -scale_lr {scale_lr} -scheduler {scheduler} -scale_factor {scale_factor} "
-            f"-adversarial_epsilon {adversarial_epsilon} -adversarial_weight {adversarial_weight} {concept_restriction}"
+            f"-adversarial_epsilon {adversarial_epsilon} -adversarial_weight {adversarial_weight} {concept_restriction} {residual}"
         )
         
         run_command(cmd)
@@ -255,6 +261,7 @@ if __name__ == "__main__":
     parser.add_argument('--adversarial_weight',default=0.25,type=float)
     parser.add_argument('--scheduler_step',default=30,type=int,help="How often to decrease the LR by a factor of 10")
     parser.add_argument('--one_batch',action='store_true',help="Should we only train on one batch?")
+    parser.add_argument('--use_residual',action='store_true',help="Should we add a residual layer?")
     parser.add_argument('--scheduler',type=str,default='none',help="'none' or 'cyclic'")
     parser.add_argument('--concept_restriction',nargs='+',type=int,help="List of concept combinations to use when training")
 
