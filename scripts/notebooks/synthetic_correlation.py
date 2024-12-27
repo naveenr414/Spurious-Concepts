@@ -158,6 +158,25 @@ train_acc =  get_accuracy(joint_model,run_joint_model,train_loader)
 val_acc = get_accuracy(joint_model,run_joint_model,val_loader)
 test_acc =get_accuracy(joint_model,run_joint_model,test_loader)
 
+activation_values = []
+run_model_function = run_joint_model
+for concept_num in range(num_objects*2):
+    val_for_concept = 0
+    trials = 5
+
+    for _ in range(trials):
+        data_point = random.randint(0,len(test_images)-1)
+        input_image = deepcopy(test_images[data_point:data_point+1])
+        current_concept_val = test_c[data_point][concept_num]
+
+        ret_image = get_maximal_activation(joint_model,run_model_function,concept_num,
+                                        get_valid_image_function(concept_num,num_objects,epsilon=32),fixed_image=input_image,current_concept_val=current_concept_val).to(device)
+        predicted_concept = torch.nn.Sigmoid()(run_model_function(joint_model,ret_image)[1].detach().cpu())[concept_num][0].detach().numpy()
+        
+        val_for_concept += abs(predicted_concept-current_concept_val.detach().numpy())/trials 
+    activation_values.append(val_for_concept)
+
+
 # +
 in_distro = 0
 correct_in_distro = 0 
@@ -250,6 +269,7 @@ final_data = {
     'concept_accuracies': concept_accuracies,
     'combinations': formatted_combinations,
     'parameters': parameters,  
+    'adversarial_activations': activation_values
 }
 
 final_data

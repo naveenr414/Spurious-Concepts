@@ -419,8 +419,8 @@ def get_name_matching_parameters(parameters,folder_name="models/model_data"):
         json_data = json.load(open(file_name))
         if 'noisy' not in json_data:
             json_data['noisy'] = False
-
-        if "pruning" in folder_name:
+        
+        if "pruning" in folder_name or 'correlation' in folder_name:
             json_data = json_data['parameters']
         for key in parameters:
             if key not in json_data or json_data[key] != parameters[key]:

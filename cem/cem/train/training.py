@@ -346,10 +346,14 @@ def train_model(
                     ),
                 )
                 if save_model:
-                    torch.save(
-                        model.state_dict(),
-                        model_saved_path,
+                    new_model = construct_model(
+                        n_concepts,
+                        n_tasks,
+                        config=config,
+                        imbalance=imbalance,
                     )
+                    new_model.load_state_dict(model.state_dict())
+                    torch.save(new_model,open(result_dir+"/best_{}.pth".format(config['seed']),"wb"))
             # freeze model and compute test accuracy
             if test_dl is not None:
                 model.freeze()
@@ -422,10 +426,15 @@ def train_model(
             # Else it is time to train it
             fit_trainer.fit(model, train_dl, val_dl)
             if save_model and (result_dir is not None):
-                torch.save(
-                    model.state_dict(),
-                    model_saved_path,
+                model_saved_path_h = os.path.join(
+                    result_dir or ".",
+                    f'{full_run_name}.pth'
                 )
+                torch.save(
+                    model,
+                    model_saved_path_h,
+                )
+
 
         if not os.path.exists(os.path.join(
             result_dir,

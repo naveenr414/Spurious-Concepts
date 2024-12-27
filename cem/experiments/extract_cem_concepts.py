@@ -6,7 +6,6 @@ from torch.utils.data import Dataset
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 from torchvision.models import resnet50, vgg16, resnet34
-from experiments.synthetic_datasets_experiments import generate_xor_data
 from torch.utils.data import TensorDataset, DataLoader
 from cem.data.CUB200.cub_loader import load_data, find_class_imbalance
 import numpy as np
@@ -47,7 +46,7 @@ def generate_data_loaders_synthetic(experiment_name):
         valid_dl: A PyTorch dataloader with data, output, and concepts
     """
 
-    cub_location = '../../../datasets/synthetic_object/{}'.format(experiment_name)
+    cub_location = '../../../datasets/{}'.format(experiment_name)
     train_data_path = cub_location+'/preprocessed/train.pkl'
     valid_data_path = cub_location+'/preprocessed/val.pkl'
     test_data_path = cub_location+'/preprocessed/test.pkl'
@@ -153,6 +152,12 @@ if __name__ == "__main__":
         n_concepts=8
     elif experiment_name == "synthetic_8":
         n_concepts=16
+    elif experiment_name == "CUB":
+        n_concepts=112
+        n_tasks = 200
+    elif experiment_name == "coco":
+        n_concepts=10
+        n_tasks = 2
     else:
         raise Exception("{} not found".format(experiment_name))
     

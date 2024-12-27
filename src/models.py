@@ -209,38 +209,37 @@ def get_accuracy(model,model_function,dataset):
     return correct_datapoints/total_datapoints
 
 def get_concept_accuracy_by_concept(model,model_function,dataset,sigmoid=False):
-    """Compute the concept accuracy, by computing the MSE Loss, for each concept
+    """Compute the concept accuracy, by computing the 0-1 Loss, for each concept
         
     Arguments:
         model: PyTorch model
         model_function: Function to run either the independent or joint model
         dataset: Data loader for the dataset
 
-    Returns: MSE Loss, 0-1 Loss
+    Returns: 0-1 Loss
     """
     
     total_datapoints = 0
     zero_one_loss = None
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    for data in dataset:
-        x,y,c = data
-
-        c_pred = model_function(model,x.to(device))[1].T
-        c_pred = c_pred.detach()
-        
-        if sigmoid:
-            c_pred = torch.nn.Sigmoid()(c_pred)
-        
-        c = torch.stack(c).T
-                
-        total_datapoints += len(y)
-        if zero_one_loss == None:
-            zero_one_loss = torch.Tensor([0.0 for i in range(c.shape[1])])
+    with torch.no_grad():  # Use torch.no_grad() to disable gradient computation
+        for data in dataset:
+            x,y,c = data
+            c_pred = model_function(model,x.to(device))[1].T
+            c_pred = c_pred.detach()
             
-        zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1).cpu() == c.cpu(),dim=0).detach()
+            if sigmoid:
+                c_pred = torch.nn.Sigmoid()(c_pred)
+            
+            c = torch.stack(c).T
+                    
+            total_datapoints += len(y)
+            if zero_one_loss == None:
+                zero_one_loss = torch.Tensor([0.0 for i in range(c.shape[1])])
                 
+            zero_one_loss += torch.sum(torch.clip(torch.round(c_pred),0,1).cpu() == c.cpu(),dim=0).detach()
+                    
     zero_one_loss /= total_datapoints
         
     return zero_one_loss
