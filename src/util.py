@@ -655,21 +655,24 @@ def mask_image_closest(img, location, other_locations, color=(0,0,0), epsilon=0.
     # Due to normalizing of image
     color = (np.array(color)-mean)/std
 
-    epsilon_scaled = round(epsilon*img.shape[1])
+    epsilon_scaled = int(epsilon * img.shape[1])
 
-    for x in range(location[0]-epsilon_scaled,location[0]+epsilon_scaled+1):
-        for y in range(location[1]-epsilon_scaled,location[1]+epsilon_scaled+1):
-            dist = (x-location[0])**2 + (y-location[1])**2
-            if dist < epsilon_scaled**2:
-                if x<0 or y<0 or x>=width or y >=height:
-                    continue 
-                for (x_,y_) in other_locations:
-                    dist_ = (x_-x)**2 + (y_-y)**2
-                    if dist_ <= dist:
-                        break
-                else:
-                    for k in range(3):
-                        img[k,y,x] = color[k]
+    x, y = np.meshgrid(
+            np.arange(location[0] - epsilon_scaled, location[0] + epsilon_scaled + 1),
+            np.arange(location[1] - epsilon_scaled, location[1] + epsilon_scaled + 1)
+        )
+    dist = (x - location[0])**2 + (y - location[1])**2
+    mask = dist < epsilon_scaled**2
+    mask &=  (x >= 0) & (y >= 0) & (x < width) & (y < height)
+    coords = np.stack([x, y], axis=2)
+
+    for other_location in other_locations:
+        other_dist = np.sum((coords - np.array(other_location))**2, axis=2)
+        mask &= other_dist > dist
+    
+    coords = coords[mask]
+
+    img[:, coords[:, 1], coords[:, 0]] = torch.tensor(color).view(-1, 1).float()
     return img
 
 def mask_bbox(img, bbox_list, color=(0,0,0), mean=np.array([0.5,0.5,0.5]),std=np.array([2,2,2])):

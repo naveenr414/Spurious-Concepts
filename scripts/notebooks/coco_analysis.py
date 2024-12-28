@@ -37,6 +37,9 @@ from matplotlib.patches import Circle
 import json
 import argparse
 import logging 
+import resource 
+import secrets
+from torch.utils.data import Subset
 
 from ConceptBottleneck.CUB.dataset import load_data
 
@@ -47,6 +50,10 @@ from src.plot import *
 
 # ## Set up dataset + model
 
+torch.cuda.set_per_process_memory_fraction(0.5)
+resource.setrlimit(resource.RLIMIT_AS, (20 * 1024 * 1024 * 1024, -1))
+torch.set_num_threads(1)
+
 logging.basicConfig(level=logging.INFO)
 logging.info("Setting up dataset")
 
@@ -55,47 +62,33 @@ is_jupyter = 'ipykernel' in sys.modules
 if is_jupyter:
     encoder_model='inceptionv3'
     seed = 42
-    expand_dim_encoder = 0
-    num_middle_encoder = 0
     dataset_name = "coco"
-    train_variation = "half"
-    scale_lr = 5
-    scale_factor = 1
+    train_variation = "none"
+    model_type = "cem"
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
-    parser.add_argument('--encoder_model', type=str, default='inceptionv3', help='Encoder model')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--dataset_name', type=str, default="coco", help='Dataset to analyze, such as coco')
-    parser.add_argument('--train_variation', type=str, default="none", help='Variation on training, such as scale_lr')
-    parser.add_argument('--scale_lr', type=float, default=1.0, help='How much does the learning rate decrease by')
-    parser.add_argument('--scale_factor', type=float, default=1.0, help='How much do scale the loss by')
+    parser.add_argument('--train_variation', type=str, default='none', help='Which train variation to analyze')
+    parser.add_argument('--model_type', type=str, default='joint', help='Which train variation to analyze')
 
     args = parser.parse_args()
-    encoder_model = args.encoder_model 
+    encoder_model = "inceptionv3" 
     seed = args.seed 
-    dataset_name = args.dataset_name
+    dataset_name = "coco"
     train_variation = args.train_variation
-    scale_lr = args.scale_lr 
-    scale_factor = args.scale_factor
+    model_type = args.model_type
 
 parameters = {
+    'dataset': dataset_name,
     'seed': seed, 
     'encoder_model': encoder_model ,
-    'dataset': dataset_name,
     'debugging': False,
     'epochs': 25,
-    'lr': 0.005, 
-    "attr_loss_weight": 0.1, 
-    'scheduler': 'none'
+    'lr': 0.005,
+    'train_variation': train_variation,
+    'model_type': model_type,
 }
-
-if train_variation == 'half':
-    parameters['train_variation'] = train_variation 
-    parameters['scale_lr'] = scale_lr 
-elif train_variation == 'loss':
-    parameters['train_variation'] = train_variation 
-    parameters['scale_factor'] = scale_factor 
 
 # -
 
@@ -103,18 +96,20 @@ train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(1
 
 test_images, test_y, test_c = unroll_data(test_loader)
 
-log_folder = get_log_folder(dataset_name,parameters).split("/")[-1]
-results_folder = "../../results/{}/{}".format(dataset_name.lower(),log_folder)
-if not os.path.exists(results_folder): 
-    os.makedirs(results_folder)
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-joint_model = get_synthetic_model(dataset_name,parameters)
-
+if model_type != 'joint':
+    joint_model = get_synthetic_model(dataset_name,{'model_type': model_type, 'dataset': 'coco', 'seed': seed})
+else:
+    joint_model = get_synthetic_model(dataset_name,parameters)
 joint_model = joint_model.to(device)
 
+
 run_model_function = run_joint_model
+if model_type == "cem":
+    run_model_function = run_cem_model
+elif model_type == "probcbm":
+    run_model_function = run_probcbm_model
 
 # ## Plot the Dataset
 
@@ -145,8 +140,15 @@ test_acc = get_accuracy(joint_model,run_model_function,test_loader)
 
 train_acc, val_acc, test_acc
 
-test_concept_f1 = get_f1_concept(joint_model,run_model_function,test_loader)
-test_concept_f1
+if model_type == 'joint':
+    concept_acc = get_concept_accuracy_by_concept(joint_model,run_model_function,test_loader)
+    locality_intervention = 1-torch.mean(concept_acc).detach().numpy()
+    json.dump({'locality_intervention': locality_intervention},open("../../results/coco/locality_intervention_{}.json".format(seed),"w"))
+
+# +
+# test_concept_f1 = get_f1_concept(joint_model,run_model_function,test_loader)
+# test_concept_f1
+# -
 
 torch.cuda.empty_cache()
 
@@ -178,7 +180,7 @@ with torch.no_grad():
 
     for data_point in test_loader:
         x,y,c = data_point 
-        _, initial_predictions_batch = run_joint_model(joint_model,x.to(device))
+        _, initial_predictions_batch = run_model_function(joint_model,x.to(device))
         initial_predictions_batch = torch.nn.Sigmoid()(initial_predictions_batch.detach().cpu().T)
         initial_predictions.append(initial_predictions_batch.numpy())
     initial_predictions = np.row_stack(initial_predictions)
@@ -195,16 +197,23 @@ for (main_part,mask_part) in valid_pairs:
     print("On main part {}".format(main_part))
     if concepts[main_part] not in results_by_part_mask:
         results_by_part_mask[concepts[main_part]] = {}
-
-    test_images, test_y, test_c = unroll_data(test_loader)
     valid_data_points = [k for k in range(len(test_pkl)) if test_c[k][main_part] == 1 and test_c[k][mask_part] == 1]
     data_points = random.sample(valid_data_points,test_data_num)
-    masked_dataset = [mask_bbox(test_images[idx],[get_new_x_y(locations_by_image[test_pkl[idx]['id']][mask_part][k],idx,test_pkl) for k in range(len(locations_by_image[test_pkl[idx]['id']][mask_part]))]) for idx in data_points]
+    subset_loader = torch.utils.data.DataLoader(
+        Subset(test_loader.dataset, data_points),
+        batch_size=len(data_points),  # Load all at once for efficiency
+        shuffle=False,
+        num_workers=test_loader.num_workers,
+        pin_memory=test_loader.pin_memory
+    )
+
+    test_images, test_y, _ = unroll_data(subset_loader)
+    masked_dataset = [mask_bbox(test_images[i],[get_new_x_y(locations_by_image[test_pkl[idx]['id']][mask_part][k],idx,test_pkl) for k in range(len(locations_by_image[test_pkl[idx]['id']][mask_part]))]) for i,idx in enumerate(data_points)]
     masked_dataset = torch.stack(masked_dataset)
 
     final_predictions = None 
     with torch.no_grad():
-        _, final_predictions_batch = run_joint_model(joint_model,masked_dataset.to(device))
+        _, final_predictions_batch = run_model_function(joint_model,masked_dataset.to(device))
         final_predictions_batch = torch.nn.Sigmoid()(final_predictions_batch.detach().cpu().T)
         final_predictions = final_predictions_batch.numpy()     
     avg_diff = np.mean(np.abs(initial_predictions[data_points] - final_predictions)[:,main_part])
@@ -220,14 +229,14 @@ results = {
         'images_per_mask': test_data_num, 
         'dataset': 'coco', 
         'train_variation': train_variation, 
-        'scale_lr': scale_lr, 
-        'scale_factor': scale_factor, 
+        'model_type': model_type, 
     }, 
     'train_acc': train_acc,
     'val_acc': val_acc,
     'test_acc': test_acc,
 }
 
-json.dump(results,open("../../results/coco/mask_{}_{}.json".format(train_variation,seed),"w"))
-
-
+if model_type == 'joint':
+    json.dump(results,open("../../results/coco/mask_{}_{}.json".format(train_variation,seed),"w"))
+else:
+    json.dump(results,open("../../results/coco/mask_{}_{}.json".format(model_type,seed),"w"))
