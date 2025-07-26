@@ -109,7 +109,7 @@ def run_cem_model(model,x,detach=True):
     
     output = model.forward(x)
     y_pred = output[2]
-    c_pred = output[1]
+    c_pred = output[0]
 
     if detach:
         y_pred = y_pred.detach().cpu()

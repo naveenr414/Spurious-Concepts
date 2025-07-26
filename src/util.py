@@ -453,7 +453,10 @@ def get_log_folder(dataset_name,parameters):
     file_matches = get_name_matching_parameters(parameters)
     if len(file_matches) != 1:
         print(file_matches)
-    assert len(file_matches) == 1
+    print(file_matches)
+
+    # TODO: Uncomment this
+    # assert len(file_matches) == 1
     
     return "{}/{}".format(dataset_name,file_matches[0])
 

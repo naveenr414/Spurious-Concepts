@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
     if experiment_name == "synthetic_1":
         n_concepts = 2
-    elif experiment_name == "synthetic_2":
+    elif experiment_name == "synthetic_object/synthetic_2":
         n_concepts = 4
     elif experiment_name == "synthetic_4":
         n_concepts=8

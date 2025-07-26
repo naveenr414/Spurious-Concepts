@@ -1,8 +1,8 @@
-# Do Concept Bottleneck Models Respect Localities
+# Do Concept Bottleneck Models Respect Localities? 
 
 ![Paper Overview](img/Locality_Abstract_CBM.png)
 
-This repository contains the implementation for the paper ["Do Concept Bottleneck Models Respect Localities"](https://arxiv.org/abs/2401.01259), previously published at the NeurIPs 2023 Workshop "XAI in Action: Past, Present, and Future Applications".
+This repository contains the implementation for the paper ["Do Concept Bottleneck Models Respect Localities?"](https://arxiv.org/abs/2401.01259), published in TMLR 2025.
 
 This work was done by [Naveen Raman](https://naveenraman.com/), [Mateo Espinosa](https://hairyballtheorem.com/), [Juyeon Heo](https://sites.google.com/view/juyeonheo/), and [Mateja Jamnik](https://www.cl.cam.ac.uk/~mj201/). 
 
@@ -14,23 +14,18 @@ When localities are not considered, concepts may be predicted based on spuriousl
 This work examines how CBM predictions change when perturbing model inputs, and reveals that CBMs may not capture localities, even when independent concepts are localised to non-overlapping feature subsets. 
 Our empirical and theoretical results demonstrate that datasets with correlated concepts may lead to accurate but uninterpretable models that fail to learn localities. 
 
-We provide code here which evaluates CBMs for the following experiments: 
-1. Synthetic Evaluations where we vary model size, dataset complexity, etc.
-2. Locality masking with the CUB and COCO datasets
-3. Localty intervention experiments to understand locality in counterfactual scenarios
-4. Methods to mitigate locality-based issues, such as pruning, label-free CBMs, and variations on training
-
-For each experiment, we provide a Jupyter notebook, which details how to run the expermient for one set of parameters, and a bash script, which details how to run the experiment across all parameters. 
-Additionally, we provide the code to reproduce all plots in the ```scripts/notebooks/Plotting.ipynb```. 
-
 ## Citation
 If you use our code for your research, please cite this as
 ```
-@article{raman2024concept,
-  title={Do Concept Bottleneck Models Obey Locality?},
-  author={Raman, Naveen and Zarlenga, Mateo Espinosa and Heo, Juyeon and Jamnik, Mateja},
-  journal={arXiv preprint arXiv:2401.01259},
-  year={2024}
+@article{
+raman2025do,
+title={Do Concept Bottleneck Models Respect Localities?},
+author={Naveen Janaki Raman and Mateo Espinosa Zarlenga and Juyeon Heo and Mateja Jamnik},
+journal={Transactions on Machine Learning Research},
+issn={2835-8856},
+year={2025},
+url={https://openreview.net/forum?id=4mCkRbUXOf},
+note={}
 }
 ```
 
@@ -43,15 +38,10 @@ $ python setup.py install
 ```
 
 ### Datasets
-For our synthetic experiments, the datasets are downloadable from <a href="https://cmu.box.com/s/4omue1ywnoboqm7tmh1rv4j1qg240p0g">here</a>. 
-Extract this file into the datasets/synthetic_object folder. 
-
-We additionally use two external datasets: CUB and COCO:
-
-1. **CUB:** We download the CUB dataset from <a href="https://www.vision.caltech.edu/datasets/cub_200_2011/">here</a>. 
-2. **COCO:** We download the COCO dataset from <a href="https://cocodataset.org/#home">here</a>. 
-
-Place the images for each dataset into two folders, named ```datasets/CUB/images``` and ```datasets/coco/images``` respectively. 
+To setup datasets, download and unzip the dataset skeleton from <a href="https://drive.google.com/file/d/1Z_exiW6SRd7rSq0YRgMLNPO_cMFzRLjE/view?usp=sharing">here</a>. 
+This consists of the metadata for CUB, COCO, and synthetic datasets, and the images for the synthetic datasets. 
+The images for CUB are located at <a href="https://www.vision.caltech.edu/datasets/cub_200_2011/">here</a>; move ```CUB_200_2011/images``` to ```datasets/CUB/images```. 
+The images for COCO are located at <a href="https://cocodataset.org/#home">here</a>; use the 2014 train and validation datasets and move all images in ```train2014``` and ```val2014``` to ```datasets/coco/images```.  
 
 ### Models
 To download trained versions of each of our models, use the link <a href="https://cmu.box.com/s/usy4h34vp51bsoeafot7jf79i9uc8cg5">here</a>. 
