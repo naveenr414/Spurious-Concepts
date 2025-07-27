@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: cem
 #     language: python
@@ -92,7 +92,10 @@ elif model_type == "probcbm":
 
 logging.info("Plotting Dataset")
 
-dataset_directory = "../../../../datasets"
+if is_jupyter:
+    dataset_directory = "../../../datasets"
+else:
+    dataset_directory = "datasets"
 
 img_path = dataset_directory+'/'+train_pkl[0]['img_path']
 image = Image.open(img_path)
@@ -306,7 +309,10 @@ elif model_type != 'joint':
     save_name = "mask_epsilon_mean_color_{}_{}.json".format(seed,model_type)
 # -
 
-json.dump(results,open("../../results/cub/{}".format(save_name),"w"))
+if is_jupyter:
+    json.dump(results,open("../../../results/cub/{}".format(save_name),"w"))
+else:
+    json.dump(results,open("results/cub/{}".format(save_name),"w"))
 
 results
 

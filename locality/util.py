@@ -10,14 +10,22 @@ from matplotlib.colors import LinearSegmentedColormap
 import cv2
 from PIL import Image
 import os 
-from src.cbm_variants.ConceptBottleneck.CUB.dataset import load_data
+from locality.cbm_variants.ConceptBottleneck.CUB.dataset import load_data
 from scipy.stats import wasserstein_distance
 from copy import deepcopy 
 import glob 
 import json 
 import os
+import sys
 
-dataset_directory = "../../../../datasets"
+
+if 'ipykernel' in sys.modules:
+    dataset_directory = "../../../datasets"
+else:
+    dataset_directory = "datasets"
+
+
+
 
 def new_metadata(dataset,split,unknown=False):
     """Create a new metadata file based on the dataset, split

@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: concepts
 #     language: python
@@ -55,7 +55,6 @@ parameters = {
     'num_concept_combinations': num_concept_combinations,
 }
 print(parameters)
-torch.cuda.set_per_process_memory_fraction(0.5)
 # -
 
 np.random.seed(seed)
@@ -89,7 +88,7 @@ elif dataset_name == "coco":
     epochs = 25
     command_to_run = "python train_cbm.py -dataset coco --encoder_model inceptionv3 --pretrained -epochs {} -num_attributes 10 -num_classes 2 -seed {} --attr_loss_weight 0.1 --optimizer adam --scheduler_step 100 -lr 0.005 --concept_restriction {}".format(epochs,seed," ".join(formatted_combinations))
 
-subprocess.run("cd ../../ConceptBottleneck && {}".format(command_to_run),shell=True)
+subprocess.run("cd locality/cbm_variants/ConceptBottleneck && {}".format(command_to_run),shell=True)
 
 
 def get_most_recent_file(directory):
@@ -103,22 +102,22 @@ def get_most_recent_file(directory):
 
 
 
-most_recent_data = get_most_recent_file("../../models/model_data/")
+most_recent_data = get_most_recent_file("../../../models/model_data/")
 rand_name = most_recent_data.split("/")[-1].replace(".json","")
-results_file = "../../results/correlation/{}.json".format(rand_name)
-delete_same_dict(parameters,"../../results/correlation")
+results_file = "../../../results/correlation/{}.json".format(rand_name)
+delete_same_dict(parameters,"../../../results/correlation")
 
 seed
 
 rand_name = get_name_matching_parameters({'seed': seed, 'dataset': dataset_name})#, 'concept_restrictions': str([int(i) for i in formatted_combinations])})
-temp = [json.load(open("../../models/model_data/{}.json".format(i))) for i in rand_name]
+temp = [json.load(open("../../../models/model_data/{}.json".format(i))) for i in rand_name]
 rand_name = [rand_name[i] for i in range(len(rand_name)) if 'concept_restriction' in temp[i] and len(temp[i]['concept_restriction']) == num_concept_combinations]
 rand_name = rand_name[-1]
-results_file = "../../results/correlation/{}.json".format(rand_name)
+results_file = "../../../results/correlation/{}.json".format(rand_name)
 
 
 # +
-joint_location = "../../models/{}/{}/joint/best_model_{}.pth".format(dataset_name,rand_name,seed)
+joint_location = "../../../models/{}/{}/joint/best_model_{}.pth".format(dataset_name,rand_name,seed)
 joint_model = torch.load(joint_location,map_location='cpu')
 
 if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:

@@ -16,3 +16,9 @@ dependencies:
   - numpy
   - scipy
   - jupyter
+  - torchmetrics
+  - conda-forge::openai-clip
+  - pip
+  - pip:
+      - pytorchcv
+

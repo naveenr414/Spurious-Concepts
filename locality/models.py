@@ -1,9 +1,9 @@
-from src.images import *
-from src.util import get_log_folder
+from locality.images import *
+from locality.util import get_log_folder
 import torch
 from torchvision import transforms
 import joblib
-from src.dataset import get_sidelength, get_offsets
+from locality.dataset import get_sidelength, get_offsets
 from copy import deepcopy
 
 def logits_to_index(logits):

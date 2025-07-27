@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -132,8 +132,13 @@ test_images, test_y, test_c = unroll_data(test_loader)
 
 parameters
 
+if is_jupyter:
+    addition = "../../../"
+else:
+    addition = ""
+
 log_folder = get_log_folder(dataset_name,parameters).split("/")[-1]
-results_folder = "../../results/synthetic/{}".format(log_folder)
+results_folder = addition+"results/synthetic/{}".format(log_folder)
 if not os.path.exists(results_folder): 
     os.makedirs(results_folder)
 
@@ -163,7 +168,10 @@ if encoder_model == 'mlp':
 
 # ## Plot the Dataset
 
-dataset_directory = "../../../../datasets"
+if is_jupyter:
+    dataset_directory = "../../../datasets"
+else:
+    dataset_directory = "datasets"
 
 img_path = dataset_directory+'/'+train_pkl[0]['img_path']
 image = Image.open(img_path)
@@ -190,36 +198,6 @@ def numpy_to_pil(img):
     im = Image.fromarray(unnormalized_image.transpose(1,2,0))
     return im
 
-
-if is_jupyter:
-    activation_values = []
-    trials = 5
-    lamb_values = [0,1,2,4,8,12,16]
-
-    for lamb in lamb_values:
-        print(lamb)
-        val_for_concept = 0
-        for concept_num in range(num_objects*2):
-            for _ in range(trials):
-                data_point = random.randint(0,len(test_images)-1)
-                input_image = deepcopy(test_images[data_point:data_point+1])
-                current_concept_val = test_c[data_point][concept_num]
-
-                ret_image = get_maximal_activation(joint_model,run_model_function,concept_num,
-                                                get_valid_image_function(concept_num,num_objects,epsilon=32),fixed_image=input_image,current_concept_val=current_concept_val,lamb=lamb).to(device)
-                predicted_concept = torch.nn.Sigmoid()(run_model_function(joint_model,ret_image)[1].detach().cpu())[concept_num][0].detach().numpy()
-
-                val_for_concept += abs(predicted_concept-current_concept_val.detach().numpy())/(trials*num_objects*2)
-        
-            if concept_num == 0:
-                ret_image = ret_image.detach()[0].cpu().numpy()
-                im = numpy_to_pil(ret_image)
-                im.save("../../results/synthetic/l2_norm/example_{}_{}.png".format(lamb,seed)) 
-        print(float(val_for_concept))
-        activation_values.append(float(val_for_concept))
-    json.dump({'activation_values': activation_values, 'lambda': lamb_values, 'parameters': parameters},open("../../results/synthetic/l2_norm/results_{}.json".format(seed),'w'))
-
-parameters
 
 # +
 activation_values = []

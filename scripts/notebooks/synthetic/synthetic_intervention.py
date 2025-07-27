@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: concepts
 #     language: python
@@ -94,7 +94,7 @@ for r in random_full_combinations:
 
 command_to_run = "python train_cbm.py -dataset {} -epochs {} -num_attributes {} --encoder_model {} -num_classes 2 -seed {} --concept_restriction {}".format(dataset_name,50,num_objects*2,encoder_model,seed," ".join(formatted_combinations))
 
-subprocess.run("cd ../../ConceptBottleneck && {}".format(command_to_run),shell=True)
+subprocess.run("cd locality/cbm_variants/ConceptBottleneck && {}".format(command_to_run),shell=True)
 
 
 def get_most_recent_file(directory):
@@ -108,13 +108,17 @@ def get_most_recent_file(directory):
 
 
 
-most_recent_data = get_most_recent_file("../../models/model_data/")
+if is_jupyter:
+    addition = "../../../"
+else:
+    addition = ""
+most_recent_data = get_most_recent_file(addition+"models/model_data/")
 rand_name = most_recent_data.split("/")[-1].replace(".json","")
-results_file = "../../results/correlation/{}.json".format(rand_name)
-delete_same_dict(parameters,"../../results/correlation")
+results_file = addition+"results/correlation/{}.json".format(rand_name)
+delete_same_dict(parameters,addition+"results/correlation")
 
 # +
-joint_location = "../../models/synthetic_object/synthetic_{}/{}/joint/best_model_{}.pth".format(num_objects,rand_name,seed)
+joint_location = addition+"models/synthetic_object/synthetic_{}/{}/joint/best_model_{}.pth".format(num_objects,rand_name,seed)
 joint_model = torch.load(joint_location,map_location='cpu')
 
 if 'encoder_model' in parameters and 'mlp' in parameters['encoder_model']:

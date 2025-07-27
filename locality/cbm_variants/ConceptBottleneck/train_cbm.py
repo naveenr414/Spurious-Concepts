@@ -52,7 +52,7 @@ def delete_same_dict(save_data):
     
     Side Effects: Deletes any model + data with the same seed, etc. parameters"""
 
-    all_dicts = glob.glob("../models/model_data/*.json")
+    all_dicts = glob.glob("../../../models/model_data/*.json")
     files_to_delete = []
 
     for file_name in all_dicts:
@@ -65,8 +65,8 @@ def delete_same_dict(save_data):
     
     for file_name in files_to_delete:
         try:
-            os.remove("../models/model_data/{}.json".format(file_name))
-            shutil.rmtree("../models/{}/{}".format(args.dataset,file_name))
+            os.remove("../../../models/model_data/{}.json".format(file_name))
+            shutil.rmtree("../../../models/{}/{}".format(args.dataset,file_name))
         except:
             print("File {} doesn't exist".format(file_name))
 
@@ -92,14 +92,14 @@ def get_log_folder(args):
 
     if args.load_model != 'none':
         load_folder = "/".join(args.load_model.split("/")[:-1])
-        log_folder = "../models/{}/{}".format(load_folder,rand_name)
+        log_folder = "../../../models/{}/{}".format(load_folder,rand_name)
     
     else:
-        log_folder = "../models/{}/{}".format(args.dataset,rand_name)
+        log_folder = "../../../models/{}/{}".format(args.dataset,rand_name)
         if not args.debugging: 
             delete_same_dict(save_data)
 
-        json.dump(save_data,open("../models/model_data/{}.json".format(rand_name),"w"))
+        json.dump(save_data,open("../../../models/model_data/{}.json".format(rand_name),"w"))
 
     return log_folder
         
@@ -223,7 +223,7 @@ def main(args):
         cmd = (
             f"python3 experiments.py cub Joint --seed {seed} -ckpt 0 -log_dir {log_folder}/{model_type} "
             f"-e {epochs} -optimizer {optimizer} {one_batch} {pretrained} -use_aux -weighted_loss multiple -use_attr "
-            f"-data_dir ../../../{dataset_folder}/{dataset}/preprocessed -n_attributes {num_attributes} "
+            f"-data_dir {dataset_folder}/{dataset}/preprocessed -n_attributes {num_attributes} "
             f"-attr_loss_weight {attr_loss_weight} -normalize_loss -b 32 -weight_decay {weight_decay} -num_classes {num_classes} "
             f"-lr {learning_rate} -encoder_model {encoder_model} -scheduler_step {scheduler_step} -end2end -use_sigmoid "
             f"-expand_dim_encoder {expand_dim_encoder} -num_middle_encoder {num_middle_encoder} -mask_loss_weight {mask_loss_weight} "

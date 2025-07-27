@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: cem
 #     language: python
@@ -42,7 +42,7 @@ if is_jupyter:
     dataset_name = "coco"
     train_variation = "none"
     model_type = "cem"
-    dataset_directory = "../../../datasets/"
+    dataset_directory = "../../../datasets"
 else:
     parser = argparse.ArgumentParser(description="Synthetic Dataset Experiments")
 
@@ -56,7 +56,7 @@ else:
     dataset_name = "coco"
     train_variation = args.train_variation
     model_type = args.model_type
-    dataset_directory = "datasets/"
+    dataset_directory = "datasets"
 
 parameters = {
     'dataset': dataset_name,
@@ -120,7 +120,7 @@ train_acc, val_acc, test_acc
 if model_type == 'joint':
     concept_acc = get_concept_accuracy_by_concept(joint_model,run_model_function,test_loader)
     locality_intervention = 1-torch.mean(concept_acc).detach().numpy()
-    json.dump({'locality_intervention': locality_intervention},open("../../results/coco/locality_intervention_{}.json".format(seed),"w"))
+    json.dump({'locality_intervention': locality_intervention},open("../../../results/coco/locality_intervention_{}.json".format(seed),"w"))
 
 torch.cuda.empty_cache()
 
@@ -209,6 +209,6 @@ results = {
 }
 
 if model_type == 'joint':
-    json.dump(results,open("../../results/coco/mask_{}_{}.json".format(train_variation,seed),"w"))
+    json.dump(results,open("../../../results/coco/mask_{}_{}.json".format(train_variation,seed),"w"))
 else:
-    json.dump(results,open("../../results/coco/mask_{}_{}.json".format(model_type,seed),"w"))
+    json.dump(results,open("../../../results/coco/mask_{}_{}.json".format(model_type,seed),"w"))

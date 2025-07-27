@@ -1,7 +1,7 @@
 import os
 import json
 import torch
-import src.cbm_variants.label_free.data_utils as data_utils
+import locality.cbm_variants.label_free.data_utils as data_utils
 
 class CBM_model(torch.nn.Module):
     def __init__(self, backbone_name, W_c, W_g, b_g, proj_mean, proj_std, device="cuda"):

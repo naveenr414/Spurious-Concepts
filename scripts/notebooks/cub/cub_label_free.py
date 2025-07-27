@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: cem
 #     language: python
@@ -69,7 +69,10 @@ train_loader, val_loader, test_loader, train_pkl, val_pkl, test_pkl = get_data(1
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-load_dir = "../../label-free/cub_lf_cbm"
+if is_jupyter:
+    load_dir = "../../../locality/cbm_variants/label_free/cub_lf_cbm"
+else:
+    load_dir = "locality/cbm_variants/label_free/cub_lf_cbm"
 with open(os.path.join(load_dir, "concepts.txt"), "r") as f:
     concepts = f.read().split("\n")
 
@@ -79,7 +82,10 @@ model = cbm.load_cbm(load_dir, device)
 
 logging.info("Plotting Dataset")
 
-dataset_directory = "../../../../datasets"
+if is_jupyter:
+    dataset_directory = "../../../datasets"
+else:
+    dataset_directory = "datasets"
 
 img_path = dataset_directory+'/'+train_pkl[0]['img_path']
 image = Image.open(img_path)
@@ -236,6 +242,9 @@ for i in results['part_mask']:
 save_name = "mask_epsilon_mean_color_{}.json".format(seed)
 # -
 
-json.dump(results,open("../../results/cub/{}".format(save_name),"w"))
+if is_jupyter:
+    json.dump(results,open("../../../results/cub/{}".format(save_name),"w"))
+else:
+    json.dump(results,open("results/cub/{}".format(save_name),"w"))
 
 

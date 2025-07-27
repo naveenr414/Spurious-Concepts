@@ -6,11 +6,12 @@ import torch
 import pickle
 import numpy as np
 import torchvision.transforms as transforms
+import sys
 
 from PIL import Image
-from src.cbm_variants.ConceptBottleneck.CUB.config import BASE_DIR, N_ATTRIBUTES
-import src.cbm_variants.ConceptBottleneck.CUB.config_chexpert as config_chexpert
-import src.cbm_variants.ConceptBottleneck.CUB.config_spurious as config_spurious
+from locality.cbm_variants.ConceptBottleneck.CUB.config import BASE_DIR, N_ATTRIBUTES
+import locality.cbm_variants.ConceptBottleneck.CUB.config_chexpert as config_chexpert
+import locality.cbm_variants.ConceptBottleneck.CUB.config_spurious as config_spurious
 from torch.utils.data import BatchSampler
 from torch.utils.data import Dataset, DataLoader
 
@@ -198,7 +199,10 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
                     transforms.ToTensor(), transforms.Normalize(mean=target_mean, std=target_std)])
 
     if path_transform == None:
-        path_transform = lambda path: "../../../datasets/"+path
+        if 'ipykernel' in sys.modules:
+            path_transform = lambda path: "../../../datasets"+path
+        else:
+            path_transform = lambda path: "datasets"+path
             
     dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform,concept_restriction=concept_restriction)
             

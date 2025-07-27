@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.15.2
+#       jupytext_version: 1.16.1
 #   kernelspec:
 #     display_name: cem
 #     language: python
@@ -23,12 +23,11 @@ import argparse
 import logging 
 import sys
 
-from src.cbm_variants.ConceptBottleneck.CUB.dataset import load_data
+from locality.cbm_variants.ConceptBottleneck.CUB.dataset import load_data
 
-from src.images import *
-from src.util import *
-from src.models import *
-from src.plot import *
+from locality.images import *
+from locality.util import *
+from locality.models import *
 
 # ## Set up dataset + model
 
@@ -81,12 +80,17 @@ reference_pkl = [
     {'id': 3, 'img_path': 'synthetic_object/synthetic_2/reference_images/0_0_0_1.png','class_label': 0, 'attribute_label': [0,0,0,1]}
 ]
 
-pickle.dump(reference_pkl,open("../../../../datasets/synthetic_object/synthetic_2/preprocessed/reference.pkl","wb"))
+if is_jupyter:
+    addition = "../../../"
+else:
+    addition = ""
 
-reference_image_path = "../../../../datasets/synthetic_object/synthetic_2/preprocessed/reference.pkl"
+pickle.dump(reference_pkl,open(addition+"datasets/synthetic_object/synthetic_2/preprocessed/reference.pkl","wb"))
+
+reference_image_path = addition+"datasets/synthetic_object/synthetic_2/preprocessed/reference.pkl"
 resize =  "inceptionv3" in encoder_model
 get_label_free=False 
-reference_loader = load_data([reference_image_path], True, no_img=False, batch_size=64, image_dir="reference_images/", n_class_attr=2, path_transform=lambda path: "../../../../datasets/"+path,resize=resize,get_label_free=get_label_free)
+reference_loader = load_data([reference_image_path], True, no_img=False, batch_size=64, image_dir="reference_images/", n_class_attr=2, path_transform=lambda path: addition+"datasets/"+path,resize=resize,get_label_free=get_label_free)
 
 
 test_images, test_y, test_c = unroll_data(test_loader)
@@ -112,7 +116,7 @@ elif model_type == "probcbm":
 
 logging.info("Plotting Dataset")
 
-dataset_directory = "../../../../datasets"
+dataset_directory = addition+"datasets"
 
 train_pkl[0]
 
