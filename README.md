@@ -31,10 +31,11 @@ note={}
 
 ## Installation and Datasets
 ### Installation
-To install dependencies, run the following
+To install dependencies and setup folders, run the following
 ```
 $ conda env create --file environment.yaml
-$ python setup.py install
+$ pip install -e .
+$ bash scripts/bash_scripts/create_folders.sh
 ```
 
 ### Datasets
@@ -48,32 +49,9 @@ To download trained versions of each of our models, use the link <a href="https:
 
 Similarly, to download our results, use the link <a href="https://cmu.box.com/s/8mvnvpwzfrowgbs53ua2biyn7t3wc6cu">here</a>. 
 
-## Synthetic Experiments
-Our synthetic experiments are largely built off of our Jupyter notebook: ```scripts/notebooks/Synthetic Experiments.ipynb```. 
-This notebook first loads in a synthetic model, and evaluates it according to the locality leakage metric. 
-
-These experiments can be automatically run through scripts titled: ```scripts/bash_scripts/analyze_models/run_synthetic...```
-
-Training models is done through: ```ConceptBottleneck/train_cbm.py```. 
-
-Scripts to train models can be found: ```scripts/bash_scripts/train_models.sh```
-
-All trained models will be stored in the ```models/``` folder. 
-
-## Locality Masking
-The notebook corresponding to our locality masking experiments can be found at: ```scripts/notebooks/CUB Analysis.ipynb``` and ```scripts/notebooks/Coco Analysis.ipynb```. 
-
-The corresponding bash scripts: ```scripts/bash_scripts/analyze_models/run_cub.sh``` and ```scripts/bash_scripts/analyze_models/run_coco.sh```
-
-Models for CUB and COCO can be trained through the scripts: ```scripts/bash_scripts/train_models/train_cub.sh``` and ```scripts/bash_scripts/train_models/train_coco.sh```
-
-## Locality Intervention
-The notebook corresponding to our locality intervention experiments can be found at: ```scripts/notebooks/Synthetic Correlation.ipynb```
-
-The corresponding bash script is: ```scripts/bash_scripts/analyze_models/run_synthetic_correlation.sh```. 
-
-## Mitigating Locality-Based Issues
-We construct experiments to analyze the impact of different methods upon improving the locality-related properties of CBMs. 
-1. **Pruning**: ```scripts/notebooks/CUB Pruning.ipynb``` and ```scripts/notebooks/Coco Pruning.ipynb```
-2. **Label Free CBMs**: ```scripts/notebooks/CUB Label Free.ipynb```
-3. **Training Modifications**: ```scripts/notebooks/CUB Analysis.ipynb``` and ```scripts/notebooks/Coco Analysis.ipynb```
+## Directory Structure
+The repository consists of four components: 
+1. Code to train different combinations of models is located in ```scripts/bash_scripts/train_models```. Each bash script uses ```locality/cbm_variants/ConceptBottleneck/train_cbm.py``` to train CBMs. For example, ```bash scripts/bash_scripts/train_models/synthetic/train_synthetic.sh``` trains all the synthetic dataset models. Code for training ProbCBM and CEM models can be found in the ```locality/cbm_variants/prob-cbm``` folder. 
+2. Notebooks in ```scripts/notebooks``` are used to conduct analyses of models according to the leakage, masking, and intervention metrics. Each notebook also has a corresponding python .py file, which is used when running larger-scale analyses. 
+3. Scripts in ```scripts/bash_scripts/analyze_models``` use the python files in ```scripts/notebooks``` to conduct larger-scale analyses. For example, running ```bash scripts/bash_scripts/analyze_models/synthetic_run_synthetic_leakage.sh``` analyzes synthetic models according to the leakage metric. All results are written to the ```results``` folder. 
+4. Plots can be found in the ```scripts/notebooks/Plotting.ipynb``` folder. 

@@ -5,8 +5,9 @@ locality/cbm_variants/ConceptBottleneck/results
 locality/cbm_variants/ConceptBottleneck/other_results/
 locality/cbm_variants/ConceptBottleneck/runs
 locality/cbm_variants/ConceptBottleneck/wandb
-results/
-src.egg-info/
+results/synthetic
+locality.egg-info/
 scripts/.ipynb_checkpoints
 scripts/runs
+locality/__pycache__/
 models/
