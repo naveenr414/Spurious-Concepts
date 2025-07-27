@@ -13,3 +13,4 @@ locality/__pycache__/
 models/
 locality/cbm_variants/label_free/__pycache__/
 datasets/
+wandb/

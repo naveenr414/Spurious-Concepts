@@ -200,9 +200,9 @@ def load_data(pkl_paths, use_attr, no_img, batch_size, uncertain_label=False, n_
 
     if path_transform == None:
         if 'ipykernel' in sys.modules:
-            path_transform = lambda path: "../../../datasets"+path
+            path_transform = lambda path: "../../../datasets/"+path
         else:
-            path_transform = lambda path: "datasets"+path
+            path_transform = lambda path: "datasets/"+path
             
     dataset = CUBDataset(pkl_paths, use_attr, no_img, uncertain_label, image_dir, n_class_attr, experiment_name,transform,path_transform = path_transform,concept_restriction=concept_restriction)
             
