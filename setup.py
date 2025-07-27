@@ -2,6 +2,6 @@
 from setuptools import find_packages, setup
 
 setup(
-    name='src',
+    name='locality',
     packages=find_packages(),
 )

@@ -1,0 +1,11 @@
+README.md
+setup.py
+locality/__init__.py
+locality/dataset.py
+locality/images.py
+locality/models.py
+locality/util.py
+locality.egg-info/PKG-INFO
+locality.egg-info/SOURCES.txt
+locality.egg-info/dependency_links.txt
+locality.egg-info/top_level.txt

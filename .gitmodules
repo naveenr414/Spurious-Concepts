@@ -1,0 +1,4 @@
+[submodule "locality/cbm_variants/prob-cbm"]
+	path = locality/cbm_variants/prob-cbm
+	url = https://github.com/mateoespinosa/cem.git
+	branch = mateo/probcbm

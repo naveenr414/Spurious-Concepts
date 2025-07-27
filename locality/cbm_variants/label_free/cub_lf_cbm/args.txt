@@ -1,0 +1,17 @@
+{
+  "clip_name": "ViT-B/16",
+  "backbone": "resnet18_cub",
+  "device": "cuda:1",
+  "batch_size": 512,
+  "saga_batch_size": 256,
+  "dataset": "cub",
+  "concept_set": "data/concept_sets/cub_gpt3_ensemble2.txt",
+  "feature_layer": "features.final_pool",
+  "activation_dir": "saved_activations",
+  "save_dir": "saved_models",
+  "clip_cutoff": 0.26,
+  "proj_steps": 1000,
+  "interpretability_cutoff": 0.45,
+  "lam": 0.0002,
+  "n_iters": 5000
+}
